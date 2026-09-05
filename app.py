@@ -1,11 +1,10 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Full-width aligned action buttons on the right panel (Download, Copy Image, Copy URL).
-- Relocated Error Correction selector placed right below the action buttons.
-- Side-by-side Layout: QR Preview on the Left, Controls on the Right.
-- High-definition crisp QR rendering.
-- Persistent Resolution Slider up to 4000px Ultra HD.
+- Full-width strictly aligned action buttons (Download, Copy Image, Copy URL).
+- Error Correction dropdown positioned directly underneath the Copy URL button.
+- Side-by-side Layout: QR Preview on the Left, Controls & Actions on the Right.
+- High-definition crisp QR rendering up to 4000px Ultra HD.
 - Full security checks for URLs.
 """
 
@@ -249,16 +248,19 @@ def render_copy_url_button(text_to_copy: str) -> None:
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to equalize button widths and clean up layout."""
+    """Injects strong custom CSS to force Streamlit download button to 100% width."""
     st.markdown(
         """
         <style>
-        /* Force Download Button to take full container width */
-        div.stDownloadButton {
-            width: 100% !important;
-        }
+        /* Force Download Button Wrapper and Button to 100% full width */
+        div[data-testid="stDownloadButton"],
+        div[data-testid="stDownloadButton"] > button,
+        div.stDownloadButton,
         div.stDownloadButton > button {
             width: 100% !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
             height: 45px !important;
             font-size: 14px !important;
             font-weight: 600 !important;
@@ -342,18 +344,9 @@ def main() -> None:
         try:
             st.markdown("---")
 
-            # Split Layout: Left Column (Preview) | Right Column (Actions & Settings)
-            col_left, col_right = st.columns([1.2, 1], gap="medium")
-
-            # Place Error Correction Selector in Right Column First (so state updates instantly)
-            with col_right:
-                error_correction = st.selectbox(
-                    "Error Correction (ความสามารถในการฟื้นฟูข้อมูล):",
-                    options=list(ERROR_CORRECTION_MAP.keys()),
-                    index=1,
-                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
-                    key="error_correction_select",
-                )
+            # Initialize Error Correction key in session_state if missing
+            if "ec_level" not in st.session_state:
+                st.session_state.ec_level = "Medium (15%)"
 
             # Generate PNG binary specifically for Preview and Image Copying
             render_px = max(target_px, 1000) if not is_vector else 1000
@@ -362,11 +355,14 @@ def main() -> None:
                 target_size=render_px,
                 fill_color=fill_color,
                 back_color=back_color,
-                error_correction_key=error_correction,
+                error_correction_key=st.session_state.ec_level,
                 fmt="PNG",
             )
 
             caption_text = "Preview (SVG Vector - Infinite Resolution)" if is_vector else f"Preview ({target_px}px x {target_px}px)"
+
+            # Split Layout: Left Column (Preview) | Right Column (Buttons + Controls)
+            col_left, col_right = st.columns([1.2, 1], gap="medium")
 
             # Left Column: Image Preview
             with col_left:
@@ -376,16 +372,16 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-            # Right Column: Action Buttons + Error Correction below Copy URL
+            # Right Column: Stacked Buttons & Error Correction Underneath
             with col_right:
                 st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
 
-                # 1. Full-width Download Button (Top)
+                # 1. Download Button (Top)
                 if is_vector:
                     svg_data = generate_svg_qr(
                         clean_url,
                         fill_color=fill_color,
-                        error_correction_key=error_correction,
+                        error_correction_key=st.session_state.ec_level,
                     )
                     st.download_button(
                         label="📥 Download SVG",
@@ -393,6 +389,7 @@ def main() -> None:
                         file_name="qr_code.svg",
                         mime="image/svg+xml",
                         type="primary",
+                        use_container_width=True,
                     )
                 else:
                     mime_map = {
@@ -405,7 +402,7 @@ def main() -> None:
                         target_size=target_px,
                         fill_color=fill_color,
                         back_color=back_color,
-                        error_correction_key=error_correction,
+                        error_correction_key=st.session_state.ec_level,
                         fmt=file_format,
                     )
                     st.download_button(
@@ -414,6 +411,7 @@ def main() -> None:
                         file_name=f"qr_code_{target_px}px.{file_format.lower()}",
                         mime=mime_map.get(file_format, "image/png"),
                         type="primary",
+                        use_container_width=True,
                     )
 
                 st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True)
@@ -425,6 +423,16 @@ def main() -> None:
 
                 # 3. Copy URL Button (Bottom)
                 render_copy_url_button(clean_url)
+
+                st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+
+                # 4. Error Correction Dropdown (Positioned UNDER Copy URL)
+                st.selectbox(
+                    "Error Correction (การฟื้นฟูข้อมูล):",
+                    options=list(ERROR_CORRECTION_MAP.keys()),
+                    key="ec_level",
+                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
+                )
 
         except Exception as err:
             logger.error("Failed to generate QR: %s", err)
