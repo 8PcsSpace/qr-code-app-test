@@ -1,17 +1,16 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Features:
-- Official Brand Vector/SVG Layout (YouTube, LINE, Facebook, Instagram, TikTok).
-- Dynamic Bottom Margin frame that auto-adjusts based on icon proportions.
-- Perfect Vertical & Horizontal Centering of icons within the extra Padding space.
-- Zero-overlap with QR data dots (100% scan reliability).
+- Official Brand Vector Icon rendering (YouTube, LINE, Facebook, Instagram, TikTok).
+- Seamless Bottom Padding Expansion directly inside the QR Quiet Zone (No extra frame box).
+- Perfectly centered icon inside the bottom QR border margin.
+- Zero-overlap with QR data modules (100% scan reliability).
 """
 
 import base64
 from io import BytesIO
 import ipaddress
 import logging
-import math
 from typing import Final
 from urllib.parse import urlparse
 
@@ -54,20 +53,20 @@ def detect_platform(url: str) -> str:
 
 
 def create_official_brand_icon(platform: str, target_height: int) -> Image.Image:
-    """Renders Official Brand Logos with 100% accurate brand geometry and colors."""
+    """Renders Official Brand Logos with 100% accurate brand geometry and official colors."""
     scale = 4
     h = target_height * scale
 
     if platform == "YouTube":
-        # Official YouTube Icon (1.4 : 1 aspect ratio)
+        # Official YouTube Play Button (1.4 : 1 aspect ratio)
         w = int(h * 1.4)
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # Red rounded container (#FF0000)
+        # Red Official Container (#FF0000)
         draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.28), fill="#FF0000")
         
-        # Official play triangle
+        # Play Triangle
         tri = [
             (int(w * 0.38), int(h * 0.26)),
             (int(w * 0.38), int(h * 0.74)),
@@ -76,15 +75,15 @@ def create_official_brand_icon(platform: str, target_height: int) -> Image.Image
         draw.polygon(tri, fill="#FFFFFF")
 
     elif platform == "LINE":
-        # Official LINE Icon (1.05 : 1 aspect ratio)
+        # Official LINE App Icon (1.05 : 1 aspect ratio)
         w = int(h * 1.05)
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # LINE Official Green (#06C755)
+        # Official LINE Green (#06C755)
         draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.22), fill="#06C755")
         
-        # Inner Speech Bubble Shape
+        # Speech Bubble
         draw.ellipse([int(w * 0.10), int(h * 0.12), int(w * 0.90), int(h * 0.72)], fill="#FFFFFF")
         tail = [
             (int(w * 0.20), int(h * 0.55)),
@@ -93,19 +92,19 @@ def create_official_brand_icon(platform: str, target_height: int) -> Image.Image
         ]
         draw.polygon(tail, fill="#FFFFFF")
         
-        # "LINE" text centered inside bubble
+        # "LINE" Text inside
         draw.text((int(w * 0.24), int(h * 0.27)), "LINE", fill="#06C755", font_size=int(h * 0.26))
 
     elif platform == "Facebook":
-        # Official Facebook Circle Icon (1 : 1 aspect ratio)
+        # Official Facebook Circle Logo (1 : 1 aspect ratio)
         w = h
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # Facebook Official Blue (#1877F2)
+        # Official Facebook Blue (#1877F2)
         draw.ellipse([0, 0, w, h], fill="#1877F2")
         
-        # Official 'f' character cutout
+        # Official 'f' Vector Cutout
         draw.rectangle([int(w * 0.48), int(h * 0.38), int(w * 0.66), int(h * 1.0)], fill="#FFFFFF")
         draw.rectangle([int(w * 0.35), int(h * 0.48), int(w * 0.78), int(h * 0.62)], fill="#FFFFFF")
         draw.arc([int(w * 0.48), int(h * 0.20), int(w * 0.82), int(h * 0.52)], 180, 270, fill="#FFFFFF", width=int(h * 0.15))
@@ -116,7 +115,7 @@ def create_official_brand_icon(platform: str, target_height: int) -> Image.Image
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # Instagram Brand Magenta/Red (#E1306C)
+        # Official Magenta/Red Base (#E1306C)
         draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.28), fill="#E1306C")
         
         stroke = max(2, int(h * 0.08))
@@ -154,36 +153,34 @@ def create_official_brand_icon(platform: str, target_height: int) -> Image.Image
     return img.resize((int(w / scale), target_height), Image.Resampling.LANCZOS)
 
 
-def add_dynamic_bottom_frame_with_icon(qr_img: Image.Image, platform: str, back_color: str) -> Image.Image:
-    """Extends bottom frame dynamically and centers the platform icon vertically in the padding space."""
+def embed_icon_in_qr_bottom_border(qr_img: Image.Image, platform: str, back_color: str) -> Image.Image:
+    """Extends the bottom quiet-zone/margin of the QR Code itself and centers the icon within it."""
     if platform == "None":
         return qr_img
 
     qr_w, qr_h = qr_img.size
 
-    # Icon height scaled relative to QR size (8.5% of total QR size)
-    icon_target_h = max(36, int(qr_h * 0.085))
+    # Icon height scaled relative to QR size (7.5% of total QR height)
+    icon_target_h = max(36, int(qr_h * 0.075))
     brand_icon = create_official_brand_icon(platform, icon_target_h)
     icon_w, icon_h = brand_icon.size
 
-    # Dynamic Bottom Padding space proportional to Icon Height
-    v_padding = int(icon_h * 0.6)  # Generous top/bottom margin
-    bottom_frame_height = icon_h + (v_padding * 2)
+    # Extra bottom margin added directly to QR Code's quiet zone
+    extra_bottom_margin = icon_h + int(icon_h * 0.8)
+    new_total_height = qr_h + extra_bottom_margin
 
-    new_h = qr_h + bottom_frame_height
+    # Canvas created with the exact background color of the QR code
+    final_qr_img = Image.new("RGBA", (qr_w, new_total_height), back_color)
+    final_qr_img.paste(qr_img, (0, 0))
 
-    # Create total canvas
-    framed_img = Image.new("RGBA", (qr_w, new_h), back_color)
-    framed_img.paste(qr_img, (0, 0))
-
-    # Calculate EXACT Vertical & Horizontal Center inside the bottom padding area
+    # Calculate exact vertical center inside the bottom extended margin of the QR Code
     icon_x = (qr_w - icon_w) // 2
-    icon_y = qr_h + ((bottom_frame_height - icon_h) // 2)
+    icon_y = qr_h + ((extra_bottom_margin - icon_h) // 2)
 
     # Paste brand icon
-    framed_img.paste(brand_icon, (icon_x, icon_y), brand_icon)
+    final_qr_img.paste(brand_icon, (icon_x, icon_y), brand_icon)
 
-    return framed_img
+    return final_qr_img
 
 
 # --- Helper Functions & Security Checks ---
@@ -230,7 +227,7 @@ def generate_raster_qr(
     fmt: str = "PNG",
     platform_icon: str = "Auto-Detect",
 ) -> bytes:
-    """Generates Ultra-HD QR Code with perfectly centered Brand Icon in dynamic bottom padding."""
+    """Generates Ultra-HD QR Code with Icon embedded directly in the bottom QR margin."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_H),
@@ -251,7 +248,7 @@ def generate_raster_qr(
         active_platform = detect_platform(data)
 
     if active_platform != "None":
-        qr_img = add_dynamic_bottom_frame_with_icon(qr_img, active_platform, back_color)
+        qr_img = embed_icon_in_qr_bottom_border(qr_img, active_platform, back_color)
 
     final_img = qr_img.convert("RGB")
 
@@ -444,7 +441,7 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("Official Brand Proportions with Perfectly Centered Padding Frame")
+    st.caption("Official Platform Icons Embedded in QR Bottom Margin")
 
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
@@ -516,7 +513,7 @@ def main() -> None:
                 platform_icon=st.session_state.icon_choice,
             )
 
-            caption_text = "Preview (SVG Vector - Dynamic Frame)" if is_vector else f"Preview ({target_px}px Print Ready)"
+            caption_text = "Preview (SVG Vector)" if is_vector else f"Preview ({target_px}px Print Ready)"
 
             col_left, col_right = st.columns([1.2, 1], gap="medium")
 
@@ -595,10 +592,10 @@ def main() -> None:
 
                 # 5. Brand Icon Selector Dropdown
                 st.selectbox(
-                    "Brand Icon Frame (โลโก้ขอบล่าง):",
+                    "Brand Icon (โลโก้ขอบล่าง):",
                     options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None (ปิดโลโก้)"],
                     key="icon_choice",
-                    help="โลโก้ดีไซน์ตาม Official Brand Identity + จัดวางกึ่งกลาง Padding ขอบล่างอัตโนมัติ",
+                    help="โลโก้ Official Brand สเกลแท้ + จัดวางอยู่กึ่งกลางขอบล่าง QR Code โดยตรง",
                 )
 
         except Exception as err:
