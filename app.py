@@ -1,9 +1,9 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Features:
-- Fixed Total Dimensions: 368 x 448 px (Width x Height).
+- Fixed Total Dimensions: 368 x 444 px (Width x Height) [-4px bottom padding reduction].
 - QR Area: 368 x 368 px at the top.
-- Bottom Padding: 80 px height at the bottom.
+- Bottom Padding: 76 px height at the bottom.
 - Centered Platform Icon (X & Y) inside the bottom padding area.
 - Official Brand Vector Path Logos (YouTube, LINE, Facebook, Instagram, TikTok).
 """
@@ -37,9 +37,9 @@ ERROR_CORRECTION_MAP: Final[dict[str, int]] = {
 }
 
 FIXED_WIDTH: Final[int] = 368
-FIXED_HEIGHT: Final[int] = 448
-QR_SIZE: Final[int] = 368  # 368x368 for top QR code
-BOTTOM_PADDING_HEIGHT: Final[int] = FIXED_HEIGHT - QR_SIZE  # 80px
+FIXED_HEIGHT: Final[int] = 444  # Reduced total height by 4px (was 448)
+QR_SIZE: Final[int] = 368       # 368x368 for top QR code
+BOTTOM_PADDING_HEIGHT: Final[int] = FIXED_HEIGHT - QR_SIZE  # 76px (was 80px)
 
 
 def detect_platform(url: str) -> str:
@@ -164,21 +164,21 @@ def embed_icon_in_fixed_canvas(
     platform: str,
     back_color: str,
 ) -> Image.Image:
-    """Creates a FIXED 368x448 px canvas and places QR at top (368x368) and Icon at bottom padding (80px height)."""
+    """Creates a FIXED 368x444 px canvas and places QR at top (368x368) and Icon at bottom padding (76px height)."""
     # Resize QR code precisely to 368x368
     qr_resized = qr_img.resize((QR_SIZE, QR_SIZE), Image.Resampling.LANCZOS)
 
-    # Create Fixed Canvas 368 x 448 px
+    # Create Fixed Canvas 368 x 444 px
     final_canvas = Image.new("RGBA", (FIXED_WIDTH, FIXED_HEIGHT), back_color)
     final_canvas.paste(qr_resized, (0, 0))
 
     if platform != "None":
-        # Target icon height fitted proportionally in 80px bottom padding (e.g. 44px height)
-        icon_target_h = 44
+        # Target icon height fitted proportionally in 76px bottom padding (e.g. 42px height)
+        icon_target_h = 42
         brand_icon = create_official_brand_icon(platform, icon_target_h)
         icon_w, icon_h = brand_icon.size
 
-        # Center Alignment inside the 80px bottom area
+        # Center Alignment inside the 76px bottom area
         icon_x = (FIXED_WIDTH - icon_w) // 2
         icon_y = QR_SIZE + ((BOTTOM_PADDING_HEIGHT - icon_h) // 2)
 
@@ -231,7 +231,7 @@ def generate_raster_qr(
     fmt: str = "PNG",
     platform_icon: str = "Auto-Detect",
 ) -> bytes:
-    """Generates Fixed 368x448 px QR Code image."""
+    """Generates Fixed 368x444 px QR Code image."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_H),
@@ -248,7 +248,7 @@ def generate_raster_qr(
     if platform_icon == "Auto-Detect":
         active_platform = detect_platform(data)
 
-    # Embed QR and Icon into Fixed 368x448 Canvas
+    # Embed QR and Icon into Fixed 368x444 Canvas
     final_img = embed_icon_in_fixed_canvas(
         qr_img=qr_img,
         platform=active_platform,
@@ -440,11 +440,11 @@ def inject_custom_css() -> None:
 
 # --- Streamlit Application ---
 def main() -> None:
-    st.set_page_config(page_title="Fixed Size QR Code Generator (368x448)", page_icon="🔗", layout="centered")
+    st.set_page_config(page_title="Fixed Size QR Code Generator (368x444)", page_icon="🔗", layout="centered")
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("Fixed Dimensions: 368 x 448 px | Official Brand Logos Center Aligned")
+    st.caption("Fixed Dimensions: 368 x 444 px | Official Brand Logos Center Aligned")
 
     raw_url = st.text_input(
         "Enter your link here:",
@@ -581,7 +581,7 @@ def main() -> None:
                     "Brand Icon (โลโก้ขอบล่าง):",
                     options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None (ปิดโลโก้)"],
                     key="icon_choice",
-                    help="จัดวางโลโก้ในพื้นที่ Padding ด้านล่าง 80px กึ่งกลาง Center X & Y",
+                    help="จัดวางโลโก้ในพื้นที่ Padding ด้านล่าง 76px กึ่งกลาง Center X & Y",
                 )
 
         except Exception as err:
