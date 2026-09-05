@@ -1,20 +1,17 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
-Features:
-- Auto-detects platform links (YouTube, Line, Instagram, Facebook, TikTok) and embeds
-  a small brand icon near the bottom-center of the QR code.
-- Customizable/Disableable brand icon selector.
-- Full-width strictly aligned action buttons (Download, Copy Image, Copy URL).
-- Side-by-side Layout with Error Correction underneath action buttons.
-- Ultra HD high-resolution image rendering.
+Comprehensive production release featuring:
+- Brand Icon placed at the absolute bottom-center edge (smaller & subtle size ~8%).
+- Direct UI control for Brand Icon dropdown placed on the right panel (under Error Correction).
+- Strict button alignment & full-width CSS override.
+- Side-by-side Layout with crisp QR rendering.
 """
 
 import base64
 from io import BytesIO
 import ipaddress
 import logging
-import re
-from typing import Final, Optional
+from typing import Final
 from urllib.parse import urlparse
 
 from PIL import Image, ImageDraw
@@ -60,10 +57,9 @@ def create_platform_icon(platform: str, size: int) -> Image.Image:
     """Generates a clean vector-like Brand Icon PIL Image."""
     icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(icon)
-    margin = int(size * 0.05)
+    margin = max(1, int(size * 0.05))
 
     if platform == "YouTube":
-        # Red rounded box + white play triangle
         draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.25), fill="#FF0000")
         poly = [
             (int(size * 0.38), int(size * 0.28)),
@@ -73,49 +69,44 @@ def create_platform_icon(platform: str, size: int) -> Image.Image:
         draw.polygon(poly, fill="#FFFFFF")
 
     elif platform == "LINE":
-        # Green rounded box + white speech bubble text
         draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.25), fill="#06C755")
         draw.ellipse([int(size * 0.15), int(size * 0.20), int(size * 0.85), int(size * 0.75)], fill="#FFFFFF")
         poly = [(int(size * 0.30), int(size * 0.65)), (int(size * 0.20), int(size * 0.82)), (int(size * 0.45), int(size * 0.70))]
         draw.polygon(poly, fill="#FFFFFF")
-        draw.text((int(size * 0.26), int(size * 0.33)), "LINE", fill="#06C755")
 
     elif platform == "Facebook":
-        # Blue circle + white 'f'
         draw.ellipse([margin, margin, size - margin, size - margin], fill="#1877F2")
-        draw.text((int(size * 0.38), int(size * 0.12)), "f", fill="#FFFFFF")
+        draw.text((int(size * 0.35), int(size * 0.10)), "f", fill="#FFFFFF")
 
     elif platform == "Instagram":
-        # Gradient/Purple rounded box + white camera rings
         draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.30), fill="#E1306C")
-        draw.rounded_rectangle([int(size * 0.25), int(size * 0.25), int(size * 0.75), int(size * 0.75)], radius=int(size * 0.15), outline="#FFFFFF", width=max(2, int(size * 0.06)))
-        draw.ellipse([int(size * 0.40), int(size * 0.40), int(size * 0.60), int(size * 0.60)], outline="#FFFFFF", width=max(2, int(size * 0.06)))
-        draw.ellipse([int(size * 0.62), int(size * 0.32), int(size * 0.68), int(size * 0.38)], fill="#FFFFFF")
+        draw.rounded_rectangle([int(size * 0.25), int(size * 0.25), int(size * 0.75), int(size * 0.75)], radius=int(size * 0.15), outline="#FFFFFF", width=max(1, int(size * 0.08)))
+        draw.ellipse([int(size * 0.40), int(size * 0.40), int(size * 0.60), int(size * 0.60)], outline="#FFFFFF", width=max(1, int(size * 0.08)))
 
     elif platform == "TikTok":
-        # Dark background + music note
         draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.25), fill="#000000")
         draw.ellipse([int(size * 0.30), int(size * 0.55), int(size * 0.55), int(size * 0.78)], fill="#25F4EE")
         draw.rectangle([int(size * 0.48), int(size * 0.25), int(size * 0.58), int(size * 0.65)], fill="#25F4EE")
-        draw.rectangle([int(size * 0.58), int(size * 0.25), int(size * 0.78), int(size * 0.40)], fill="#FE2C55")
 
     return icon
 
 
-def embed_bottom_icon(qr_img: Image.Image, platform: str, fill_color: str, back_color: str) -> Image.Image:
-    """Overlays small brand logo at bottom-center inside QR image with clean background pad."""
+def embed_bottom_icon(qr_img: Image.Image, platform: str, back_color: str) -> Image.Image:
+    """Overlays a smaller brand icon at the absolute bottom edge of the QR code."""
     if platform == "None":
         return qr_img
 
     qr_w, qr_h = qr_img.size
-    icon_size = int(qr_w * 0.12)  # Small subtle icon (12% of QR size)
     
-    # Calculate Bottom-Center position (leaving space for outer QR border)
+    # Smaller Icon Size (~8% of QR resolution)
+    icon_size = max(16, int(qr_w * 0.08))
+    
+    # Position at absolute bottom edge (aligned between bottom-left and bottom-right finder patterns)
     x = (qr_w - icon_size) // 2
-    y = int(qr_h * 0.80) - (icon_size // 2)
+    # Place at the lower border region (~90% height)
+    y = int(qr_h * 0.90) - (icon_size // 2)
 
-    # White/Custom background badge behind icon to keep QR scannable
-    pad = max(2, int(icon_size * 0.12))
+    pad = max(1, int(icon_size * 0.15))
     bg_badge = Image.new("RGBA", (icon_size + pad * 2, icon_size + pad * 2), (0, 0, 0, 0))
     bg_draw = ImageDraw.Draw(bg_badge)
     bg_draw.rounded_rectangle([0, 0, icon_size + pad * 2, icon_size + pad * 2], radius=int(icon_size * 0.2), fill=back_color)
@@ -173,7 +164,7 @@ def generate_raster_qr(
     fmt: str = "PNG",
     platform_icon: str = "Auto-Detect",
 ) -> bytes:
-    """Generates ultra-crisp Raster QR Codes with Optional Bottom Brand Icon."""
+    """Generates ultra-crisp Raster QR Codes with Bottom Edge Brand Icon."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
@@ -188,13 +179,13 @@ def generate_raster_qr(
     if target_size != qr_img.size[0]:
         qr_img = qr_img.resize((target_size, target_size), Image.Resampling.NEAREST)
 
-    # Detect platform icon
+    # Resolve platform
     active_platform = platform_icon
     if platform_icon == "Auto-Detect":
         active_platform = detect_platform(data)
 
     if active_platform != "None":
-        qr_img = embed_bottom_icon(qr_img, active_platform, fill_color, back_color)
+        qr_img = embed_bottom_icon(qr_img, active_platform, back_color)
 
     final_img = qr_img.convert("RGB")
 
@@ -387,14 +378,14 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("High-Resolution Vector & Raster Image Support with Auto Brand Icon Embedding")
+    st.caption("High-Resolution Vector & Raster Image Support with Bottom Brand Icon Embedding")
 
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
 
     raw_url = st.text_input(
         "Enter your link here:",
-        placeholder="https://www.youtube.com/watch?v=...",
+        placeholder="https://www.instagram.com/...",
         help="Type or paste a valid web address",
         key="url_input",
     )
@@ -410,20 +401,13 @@ def main() -> None:
         for warn in sec_warnings:
             st.warning(warn)
 
-        # Style Customization Expander
-        with st.expander("🎨 Customize QR Colors & Icon", expanded=False):
+        # Style Customization Expander (Colors)
+        with st.expander("🎨 Customize QR Colors", expanded=False):
             col_fg, col_bg = st.columns(2)
             with col_fg:
                 fill_color = st.color_picker("QR Color (จุด QR)", "#000000")
             with col_bg:
                 back_color = st.color_picker("Background Color (พื้นหลัง)", "#FFFFFF")
-
-            icon_option = st.selectbox(
-                "Bottom Brand Icon (ไอคอนช่องทางตรงกลางล่าง):",
-                options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None"],
-                index=0,
-                help="ระบบจะตรวจจับจาก URL อัตโนมัติ หรือเลือกเปลี่ยนโลโก้ตามต้องการได้ครับ",
-            )
 
         # Centered Format Selector
         _, center_fmt_col, _ = st.columns([0.2, 2.6, 0.2])
@@ -451,28 +435,25 @@ def main() -> None:
             st.markdown("---")
 
             if "ec_level" not in st.session_state:
-                st.session_state.ec_level = "Medium (15%)"
+                st.session_state.ec_level = "High (30% - Best for print)"
+            if "icon_choice" not in st.session_state:
+                st.session_state.icon_choice = "Auto-Detect"
 
-            # Auto-increase error correction level if an icon is embedded to keep QR 100% scannable
-            active_platform = icon_option if icon_option != "Auto-Detect" else detect_platform(clean_url)
-            effective_ec = st.session_state.ec_level
-            if active_platform != "None" and effective_ec in ("Low (7%)", "Medium (15%)"):
-                effective_ec = "Quartile (25%)"
-
+            # Generate PNG binary specifically for Preview and Image Copying
             render_px = max(target_px, 1000) if not is_vector else 1000
             png_bytes_for_copy = generate_raster_qr(
                 clean_url,
                 target_size=render_px,
                 fill_color=fill_color,
                 back_color=back_color,
-                error_correction_key=effective_ec,
+                error_correction_key=st.session_state.ec_level,
                 fmt="PNG",
-                platform_icon=icon_option,
+                platform_icon=st.session_state.icon_choice,
             )
 
             caption_text = "Preview (SVG Vector - Infinite Resolution)" if is_vector else f"Preview ({target_px}px x {target_px}px)"
 
-            # Split Layout: Left Column (Preview) | Right Column (Buttons + Controls)
+            # Split Layout: Left Column (Preview) | Right Column (Actions & Controls)
             col_left, col_right = st.columns([1.2, 1], gap="medium")
 
             # Left Column: Image Preview
@@ -483,7 +464,7 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-            # Right Column: Action Buttons & Error Correction Underneath
+            # Right Column: Action Buttons & Visible Controls Underneath
             with col_right:
                 st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
 
@@ -492,7 +473,7 @@ def main() -> None:
                     svg_data = generate_svg_qr(
                         clean_url,
                         fill_color=fill_color,
-                        error_correction_key=effective_ec,
+                        error_correction_key=st.session_state.ec_level,
                     )
                     st.download_button(
                         label="📥 Download SVG",
@@ -513,9 +494,9 @@ def main() -> None:
                         target_size=target_px,
                         fill_color=fill_color,
                         back_color=back_color,
-                        error_correction_key=effective_ec,
+                        error_correction_key=st.session_state.ec_level,
                         fmt=file_format,
-                        platform_icon=icon_option,
+                        platform_icon=st.session_state.icon_choice,
                     )
                     st.download_button(
                         label=f"📥 Download {file_format}",
@@ -538,12 +519,22 @@ def main() -> None:
 
                 st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
-                # 4. Error Correction Dropdown (Positioned UNDER Copy URL)
+                # 4. Error Correction Dropdown
                 st.selectbox(
                     "Error Correction (การฟื้นฟูข้อมูล):",
                     options=list(ERROR_CORRECTION_MAP.keys()),
                     key="ec_level",
-                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบ ชำรุด หรือมีการแปะ Logo",
+                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบ ชำรุด หรือมี Logo",
+                )
+
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+
+                # 5. Brand Icon Selector Dropdown (Standalone Right Control)
+                st.selectbox(
+                    "Brand Icon (โลโก้แบรนด์ล่างสุด):",
+                    options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None (ปิดโลโก้)"],
+                    key="icon_choice",
+                    help="เลือก Auto-Detect เพื่อตรวจจับตาม URL หรือเลือกปิด (None) ได้ตามต้องการครับ",
                 )
 
         except Exception as err:
