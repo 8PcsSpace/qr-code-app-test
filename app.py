@@ -1,12 +1,14 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Features:
-- Instant real-time QR generation.
+- Instant real-time QR generation (No Enter required).
 - High-definition image scaling & Vector SVG export.
+- Custom Foreground/Background colors & Error Correction levels.
+- Caching for performance optimization.
 - Center-aligned UI.
 """
 
-from io import BytesIO, StringIO
+from io import BytesIO
 import logging
 from typing import Final
 from urllib.parse import urlparse
@@ -23,6 +25,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("QRCodeApp")
 
+# Error Correction Mapping
+ERROR_CORRECTION_MAP: Final[dict[str, int]] = {
+    "Low (7%)": qrcode.constants.ERROR_CORRECT_L,
+    "Medium (15%)": qrcode.constants.ERROR_CORRECT_M,
+    "Quartile (25%)": qrcode.constants.ERROR_CORRECT_Q,
+    "High (30% - Best for print)": qrcode.constants.ERROR_CORRECT_H,
+}
+
 
 # --- Helper Functions ---
 def validate_url(url: str) -> bool:
@@ -34,31 +44,60 @@ def validate_url(url: str) -> bool:
         return False
 
 
-def generate_png_qr(data: str, target_size: int = 500) -> bytes:
-    """Generates a PNG QR Code and resizes it cleanly to target resolution."""
-    qr_img = qrcode.make(data)
-    
-    # Resize image to targeted resolution with high quality filtering
+@st.cache_data(show_spinner=False)
+def generate_png_qr(
+    data: str,
+    target_size: int = 500,
+    fill_color: str = "#000000",
+    back_color: str = "#FFFFFF",
+    error_correction_key: str = "Medium (15%)",
+) -> bytes:
+    """Generates a PNG QR Code with custom colors and error correction levels."""
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+
+    qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGB")
+
     if target_size != qr_img.size[0]:
         qr_img = qr_img.resize((target_size, target_size), Image.Resampling.LANCZOS)
-    
+
     with BytesIO() as buffer:
         qr_img.save(buffer, format="PNG")
         return buffer.getvalue()
 
 
-def generate_svg_qr(data: str) -> str:
+@st.cache_data(show_spinner=False)
+def generate_svg_qr(
+    data: str,
+    fill_color: str = "#000000",
+    error_correction_key: str = "Medium (15%)",
+) -> str:
     """Generates an infinite-scale Vector SVG string."""
     factory = qrcode.image.svg.SvgPathImage
-    svg_img = qrcode.make(data, image_factory=factory)
-    
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
+        box_size=10,
+        border=4,
+        image_factory=factory,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+
+    svg_img = qr.make_image(fill_color=fill_color)
     with BytesIO() as buffer:
         svg_img.save(buffer)
         return buffer.getvalue().decode("utf-8")
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to stretch download button across parent container."""
+    """Injects custom CSS to align download buttons and styling."""
     st.markdown(
         """
         <style>
@@ -77,13 +116,13 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("High-Resolution Vector & Raster Image Support")
+    st.caption("High-Resolution Vector & Raster Image Support with Custom Styling")
 
     raw_url = st.text_input(
         "Enter your link here:",
         placeholder="https://example.com",
         help="Type or paste a valid web address",
-        key="url_input"
+        key="url_input",
     )
 
     clean_url = raw_url.strip()
@@ -92,6 +131,21 @@ def main() -> None:
         if not validate_url(clean_url):
             st.warning("⚠️ Please enter a valid URL (e.g., https://example.com)")
             return
+
+        # Settings Accordion
+        with st.expander("🎨 Customize QR Code Style & Quality", expanded=False):
+            col_fg, col_bg = st.columns(2)
+            with col_fg:
+                fill_color = st.color_picker("QR Color (จุด QR)", "#000000")
+            with col_bg:
+                back_color = st.color_picker("Background Color (พื้นหลัง)", "#FFFFFF")
+
+            error_correction = st.selectbox(
+                "Error Correction (ความสามารถในการฟื้นฟูข้อมูล):",
+                options=list(ERROR_CORRECTION_MAP.keys()),
+                index=1,
+                help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
+            )
 
         col_res, col_fmt = st.columns(2)
         with col_res:
@@ -107,7 +161,6 @@ def main() -> None:
                 horizontal=True,
             )
 
-        # Map options to pixel dimensions
         dimension_map = {
             "Standard (500px)": 500,
             "High HD (1000px)": 1000,
@@ -116,11 +169,16 @@ def main() -> None:
         target_px = dimension_map[resolution]
 
         try:
-            # Preview QR Code (Lightweight)
-            preview_bytes = generate_png_qr(clean_url, target_size=400)
+            preview_bytes = generate_png_qr(
+                clean_url,
+                target_size=400,
+                fill_color=fill_color,
+                back_color=back_color,
+                error_correction_key=error_correction,
+            )
 
             st.markdown("---")
-            
+
             # Center alignment layout
             _, center_col, _ = st.columns([1, 2, 1])
 
@@ -128,7 +186,11 @@ def main() -> None:
                 st.image(preview_bytes, caption="Your Generated QR Code", use_container_width=True)
 
                 if "SVG" in file_format:
-                    svg_data = generate_svg_qr(clean_url)
+                    svg_data = generate_svg_qr(
+                        clean_url,
+                        fill_color=fill_color,
+                        error_correction_key=error_correction,
+                    )
                     st.download_button(
                         label="📥 Download Vector (SVG)",
                         data=svg_data,
@@ -137,7 +199,13 @@ def main() -> None:
                         type="primary",
                     )
                 else:
-                    png_hd_bytes = generate_png_qr(clean_url, target_size=target_px)
+                    png_hd_bytes = generate_png_qr(
+                        clean_url,
+                        target_size=target_px,
+                        fill_color=fill_color,
+                        back_color=back_color,
+                        error_correction_key=error_correction,
+                    )
                     st.download_button(
                         label=f"📥 Download PNG ({target_px}px)",
                         data=png_hd_bytes,
