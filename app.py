@@ -1,10 +1,11 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
-Features:
-- Expanded Icon Size (+4% scaling for optimal visual proportion).
-- Precise Bottom Padding Math based on QR Data Module Boundary.
-- Custom gap_top & gap_bottom parameters to strictly align Platform Icons in Center (X & Y).
-- Official Brand Vector Path Logos (YouTube, LINE, Facebook, Instagram, TikTok).
+Comprehensive production release featuring:
+- Full-width strictly aligned action buttons (Download, Copy Image, Copy URL).
+- Error Correction dropdown positioned directly underneath the Copy URL button.
+- Side-by-side Layout: QR Preview on the Left, Controls & Actions on the Right.
+- High-definition crisp QR rendering up to 4000px Ultra HD.
+- Full security checks for URLs.
 """
 
 import base64
@@ -14,7 +15,7 @@ import logging
 from typing import Final
 from urllib.parse import urlparse
 
-from PIL import Image, ImageDraw
+from PIL import Image
 import qrcode
 import qrcode.image.svg
 import streamlit as st
@@ -36,169 +37,9 @@ ERROR_CORRECTION_MAP: Final[dict[str, int]] = {
 }
 
 
-def detect_platform(url: str) -> str:
-    """Detects platform from URL string."""
-    url_lower = url.lower()
-    if "youtube.com" in url_lower or "youtu.be" in url_lower:
-        return "YouTube"
-    elif "line.me" in url_lower or "line.naver.jp" in url_lower or "lin.ee" in url_lower:
-        return "LINE"
-    elif "instagram.com" in url_lower or "instagr.am" in url_lower:
-        return "Instagram"
-    elif "facebook.com" in url_lower or "fb.watch" in url_lower or "fb.com" in url_lower:
-        return "Facebook"
-    elif "tiktok.com" in url_lower:
-        return "TikTok"
-    return "None"
-
-
-def create_official_brand_icon(platform: str, target_height: int) -> Image.Image:
-    """Renders Official Brand Logos with 100% accurate brand geometry and colors."""
-    scale = 4
-    h = target_height * scale
-
-    if platform == "YouTube":
-        # Official YouTube Play Icon (1.4 : 1 aspect ratio)
-        w = int(h * 1.4)
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        
-        # Red Official Container (#FF0000)
-        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.28), fill="#FF0000")
-        
-        # Play Triangle
-        tri = [
-            (int(w * 0.38), int(h * 0.26)),
-            (int(w * 0.38), int(h * 0.74)),
-            (int(w * 0.68), int(h * 0.50)),
-        ]
-        draw.polygon(tri, fill="#FFFFFF")
-
-    elif platform == "LINE":
-        # Official LINE App Icon (1.05 : 1 aspect ratio)
-        w = int(h * 1.05)
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        
-        # Official LINE Green (#06C755)
-        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.22), fill="#06C755")
-        
-        # Speech Bubble
-        draw.ellipse([int(w * 0.10), int(h * 0.12), int(w * 0.90), int(h * 0.72)], fill="#FFFFFF")
-        tail = [
-            (int(w * 0.20), int(h * 0.55)),
-            (int(w * 0.12), int(h * 0.82)),
-            (int(w * 0.38), int(h * 0.68)),
-        ]
-        draw.polygon(tail, fill="#FFFFFF")
-        
-        # "LINE" Text inside
-        draw.text((int(w * 0.24), int(h * 0.27)), "LINE", fill="#06C755", font_size=int(h * 0.26))
-
-    elif platform == "Facebook":
-        # Official Facebook Circle Icon (1 : 1 aspect ratio)
-        w = h
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        
-        # Official Facebook Blue (#1877F2)
-        draw.ellipse([0, 0, w, h], fill="#1877F2")
-        
-        # Official 'f' Cutout
-        draw.rectangle([int(w * 0.48), int(h * 0.38), int(w * 0.66), int(h * 1.0)], fill="#FFFFFF")
-        draw.rectangle([int(w * 0.35), int(h * 0.48), int(w * 0.78), int(h * 0.62)], fill="#FFFFFF")
-        draw.arc([int(w * 0.48), int(h * 0.20), int(w * 0.82), int(h * 0.52)], 180, 270, fill="#FFFFFF", width=int(h * 0.15))
-
-    elif platform == "Instagram":
-        # Official Instagram Gradient Icon (1 : 1 aspect ratio)
-        w = h
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        
-        # Magenta/Red Base (#E1306C)
-        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.28), fill="#E1306C")
-        
-        stroke = max(2, int(h * 0.08))
-        draw.rounded_rectangle(
-            [int(w * 0.18), int(h * 0.18), int(w * 0.82), int(h * 0.82)],
-            radius=int(h * 0.20),
-            outline="#FFFFFF",
-            width=stroke,
-        )
-        draw.ellipse([int(w * 0.35), int(h * 0.35), int(w * 0.65), int(h * 0.65)], outline="#FFFFFF", width=stroke)
-        draw.ellipse([int(w * 0.68), int(h * 0.25), int(w * 0.77), int(h * 0.34)], fill="#FFFFFF")
-
-    elif platform == "TikTok":
-        # Official TikTok Badge Icon (1 : 1 aspect ratio)
-        w = h
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        
-        # Black Background
-        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.25), fill="#000000")
-        
-        # Cyan Note Offset
-        draw.ellipse([int(w * 0.24), int(h * 0.50), int(w * 0.54), int(h * 0.80)], fill="#25F4EE")
-        draw.rectangle([int(w * 0.44), int(h * 0.20), int(w * 0.54), int(h * 0.65)], fill="#25F4EE")
-        draw.rectangle([int(w * 0.54), int(h * 0.20), int(w * 0.74), int(h * 0.36)], fill="#25F4EE")
-        
-        # Magenta Note Shift
-        draw.ellipse([int(w * 0.28), int(h * 0.52), int(w * 0.58), int(h * 0.82)], fill="#FE2C55")
-        draw.rectangle([int(w * 0.48), int(h * 0.22), int(w * 0.58), int(h * 0.67)], fill="#FE2C55")
-
-    else:
-        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-
-    # Downscale smoothly using High-Quality Lanczos Filter
-    return img.resize((int(w / scale), target_height), Image.Resampling.LANCZOS)
-
-
-def embed_icon_in_qr_bottom_border(
-    qr_img: Image.Image,
-    platform: str,
-    back_color: str,
-    qr_border_modules: int = 4,
-    module_size: int = 20
-) -> Image.Image:
-    """Calculates exact bottom padding using math formula with +4% enlarged Icon size."""
-    if platform == "None":
-        return qr_img
-
-    qr_w, qr_h = qr_img.size
-
-    # Calculate Quiet Zone Border in pixels
-    quiet_zone_px = qr_border_modules * module_size
-    gap_top = quiet_zone_px
-    gap_bottom = quiet_zone_px
-
-    # Expanded Icon Height proportionally (Increased from 0.08 to 0.12 ~ +4% larger fill)
-    icon_target_h = max(45, int(qr_h * 0.12))
-    brand_icon = create_official_brand_icon(platform, icon_target_h)
-    icon_w, icon_h = brand_icon.size
-
-    data_bottom_y = qr_h - gap_top
-
-    # Total bottom padding height
-    total_bottom_padding = gap_top + icon_h + gap_bottom
-    new_total_height = data_bottom_y + total_bottom_padding
-
-    # Create new canvas
-    final_qr_img = Image.new("RGBA", (qr_w, new_total_height), back_color)
-    final_qr_img.paste(qr_img, (0, 0))
-
-    # Calculate Center Alignment (X & Y)
-    icon_x = (qr_w - icon_w) // 2
-    available_slot_h = total_bottom_padding - gap_top - gap_bottom
-    icon_y = data_bottom_y + gap_top + ((available_slot_h - icon_h) // 2)
-
-    # Paste icon
-    final_qr_img.paste(brand_icon, (icon_x, icon_y), brand_icon)
-
-    return final_qr_img
-
-
 # --- Helper Functions & Security Checks ---
 def validate_url(url: str) -> bool:
+    """Checks if the given string is a valid HTTP/HTTPS URL structure."""
     try:
         result = urlparse(url)
         return all([result.scheme in ("http", "https"), result.netloc])
@@ -207,6 +48,7 @@ def validate_url(url: str) -> bool:
 
 
 def check_security_warnings(url: str) -> list[str]:
+    """Inspects URL for potential security or usability issues (SSRF / Data Length)."""
     warnings = []
     try:
         parsed = urlparse(url)
@@ -237,53 +79,31 @@ def generate_raster_qr(
     target_size: int = 1000,
     fill_color: str = "#000000",
     back_color: str = "#FFFFFF",
-    error_correction_key: str = "High (30% - Best for print)",
+    error_correction_key: str = "Medium (15%)",
     fmt: str = "PNG",
-    platform_icon: str = "Auto-Detect",
 ) -> bytes:
-    """Generates Ultra-HD QR Code with Icon aligned strictly to mathematically calculated padding."""
-    border_modules = 4
-    box_size = 20
-
+    """Generates ultra-crisp Raster QR Codes (PNG, JPG, WEBP)."""
     qr = qrcode.QRCode(
         version=None,
-        error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_H),
-        box_size=box_size,
-        border=border_modules,
+        error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
+        box_size=20,
+        border=4,
     )
     qr.add_data(data)
     qr.make(fit=True)
 
-    qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGBA")
+    qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGB")
 
     if target_size != qr_img.size[0]:
-        scale_ratio = target_size / qr_img.size[0]
-        box_size = int(box_size * scale_ratio)
         qr_img = qr_img.resize((target_size, target_size), Image.Resampling.NEAREST)
-
-    # Detect platform icon
-    active_platform = platform_icon
-    if platform_icon == "Auto-Detect":
-        active_platform = detect_platform(data)
-
-    if active_platform != "None":
-        qr_img = embed_icon_in_qr_bottom_border(
-            qr_img=qr_img,
-            platform=active_platform,
-            back_color=back_color,
-            qr_border_modules=border_modules,
-            module_size=box_size
-        )
-
-    final_img = qr_img.convert("RGB")
 
     with BytesIO() as buffer:
         save_fmt = fmt.upper()
         if save_fmt == "JPG":
             save_fmt = "JPEG"
-            final_img.save(buffer, format=save_fmt, quality=100, subsampling=0)
+            qr_img.save(buffer, format=save_fmt, quality=100, subsampling=0)
         else:
-            final_img.save(buffer, format=save_fmt, quality=100)
+            qr_img.save(buffer, format=save_fmt, quality=100)
             
         return buffer.getvalue()
 
@@ -292,13 +112,13 @@ def generate_raster_qr(
 def generate_svg_qr(
     data: str,
     fill_color: str = "#000000",
-    error_correction_key: str = "High (30% - Best for print)",
+    error_correction_key: str = "Medium (15%)",
 ) -> str:
-    """Generates pure vector SVG QR code."""
+    """Generates an infinite-scale Vector SVG string."""
     factory = qrcode.image.svg.SvgPathImage
     qr = qrcode.QRCode(
         version=None,
-        error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_H),
+        error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
         box_size=20,
         border=4,
         image_factory=factory,
@@ -313,7 +133,7 @@ def generate_svg_qr(
 
 
 def render_copy_image_button(img_bytes: bytes) -> None:
-    """Renders a custom HTML/JS button that copies image to system clipboard."""
+    """Renders a custom HTML/JS button that copies the actual PNG image to system clipboard."""
     b64_img = base64.b64encode(img_bytes).decode("utf-8")
     
     html_code = f"""
@@ -428,10 +248,11 @@ def render_copy_url_button(text_to_copy: str) -> None:
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to ensure proper action button sizing."""
+    """Injects strong custom CSS to force Streamlit download button to 100% width."""
     st.markdown(
         """
         <style>
+        /* Force Download Button Wrapper and Button to 100% full width */
         div[data-testid="stDownloadButton"],
         div[data-testid="stDownloadButton"] > button,
         div.stDownloadButton,
@@ -447,6 +268,7 @@ def inject_custom_css() -> None:
             margin: 0 !important;
         }
 
+        /* Image Display Crispness */
         div[data-testid="stImage"] > img {
             image-rendering: pixelated !important;
             image-rendering: -moz-crisp-edges !important;
@@ -466,7 +288,7 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("Official Platform test.")
+    st.caption("High-Resolution Vector & Raster Image Support with Full Security Checks")
 
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
@@ -489,7 +311,7 @@ def main() -> None:
         for warn in sec_warnings:
             st.warning(warn)
 
-        # Style Customization Expander (Colors)
+        # Style Customization Expander (Color Picker only)
         with st.expander("🎨 Customize QR Colors", expanded=False):
             col_fg, col_bg = st.columns(2)
             with col_fg:
@@ -516,17 +338,17 @@ def main() -> None:
             key="resolution_val",
             step=50,
             disabled=is_vector,
-            help="สำหรับ SVG จะถูก Fix คุณภาพไว้สูงสุดอัตโนมัติ" if is_vector else "ปรับขนาดความละเอียดพิกเซลภาพได้สูงสุดถึง 4000px Ultra HD สำหรับนำไปพิมพ์งาน",
+            help="สำหรับ SVG จะถูก Fix คุณภาพไว้สูงสุดอัตโนมัติ ไม่จำเป็นต้องปรับขนาดพิกเซล" if is_vector else "ปรับขนาดความละเอียดพิกเซลภาพได้สูงสุดถึง 4000px Ultra HD",
         )
 
         try:
             st.markdown("---")
 
+            # Initialize Error Correction key in session_state if missing
             if "ec_level" not in st.session_state:
-                st.session_state.ec_level = "High (30% - Best for print)"
-            if "icon_choice" not in st.session_state:
-                st.session_state.icon_choice = "Auto-Detect"
+                st.session_state.ec_level = "Medium (15%)"
 
+            # Generate PNG binary specifically for Preview and Image Copying
             render_px = max(target_px, 1000) if not is_vector else 1000
             png_bytes_for_copy = generate_raster_qr(
                 clean_url,
@@ -535,11 +357,11 @@ def main() -> None:
                 back_color=back_color,
                 error_correction_key=st.session_state.ec_level,
                 fmt="PNG",
-                platform_icon=st.session_state.icon_choice,
             )
 
-            caption_text = "Preview (SVG Vector)" if is_vector else f"Preview ({target_px}px Print Ready)"
+            caption_text = "Preview (SVG Vector - Infinite Resolution)" if is_vector else f"Preview ({target_px}px x {target_px}px)"
 
+            # Split Layout: Left Column (Preview) | Right Column (Buttons + Controls)
             col_left, col_right = st.columns([1.2, 1], gap="medium")
 
             # Left Column: Image Preview
@@ -550,7 +372,7 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-            # Right Column: Action Buttons & Controls
+            # Right Column: Stacked Buttons & Error Correction Underneath
             with col_right:
                 st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
 
@@ -582,7 +404,6 @@ def main() -> None:
                         back_color=back_color,
                         error_correction_key=st.session_state.ec_level,
                         fmt=file_format,
-                        platform_icon=st.session_state.icon_choice,
                     )
                     st.download_button(
                         label=f"📥 Download {file_format}",
@@ -605,22 +426,12 @@ def main() -> None:
 
                 st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
-                # 4. Error Correction Dropdown
+                # 4. Error Correction Dropdown (Positioned UNDER Copy URL)
                 st.selectbox(
                     "Error Correction (การฟื้นฟูข้อมูล):",
                     options=list(ERROR_CORRECTION_MAP.keys()),
                     key="ec_level",
-                    help="แนะนำให้ใช้ High (30%) สำหรับการนำไปพิมพ์ลงกระดาษหรืองานสกรีน",
-                )
-
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-
-                # 5. Brand Icon Selector Dropdown
-                st.selectbox(
-                    "Brand Icon (โลโก้ขอบล่าง):",
-                    options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None (ปิดโลโก้)"],
-                    key="icon_choice",
-                    help="จัดวางโลโก้ตามสูตรระยะ Gap บน + Icon Height + Gap ล่าง กึ่งกลาง Center X & Y",
+                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
                 )
 
         except Exception as err:
