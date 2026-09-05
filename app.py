@@ -1,21 +1,23 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
-Comprehensive production release featuring:
+Features:
+- Auto-detects platform links (YouTube, Line, Instagram, Facebook, TikTok) and embeds
+  a small brand icon near the bottom-center of the QR code.
+- Customizable/Disableable brand icon selector.
 - Full-width strictly aligned action buttons (Download, Copy Image, Copy URL).
-- Error Correction dropdown positioned directly underneath the Copy URL button.
-- Side-by-side Layout: QR Preview on the Left, Controls & Actions on the Right.
-- High-definition crisp QR rendering up to 4000px Ultra HD.
-- Full security checks for URLs.
+- Side-by-side Layout with Error Correction underneath action buttons.
+- Ultra HD high-resolution image rendering.
 """
 
 import base64
 from io import BytesIO
 import ipaddress
 import logging
-from typing import Final
+import re
+from typing import Final, Optional
 from urllib.parse import urlparse
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import qrcode
 import qrcode.image.svg
 import streamlit as st
@@ -37,9 +39,98 @@ ERROR_CORRECTION_MAP: Final[dict[str, int]] = {
 }
 
 
+# --- Brand Icon Drawing Utilities ---
+def detect_platform(url: str) -> str:
+    """Detects platform from URL string."""
+    url_lower = url.lower()
+    if "youtube.com" in url_lower or "youtu.be" in url_lower:
+        return "YouTube"
+    elif "line.me" in url_lower or "line.naver.jp" in url_lower or "lin.ee" in url_lower:
+        return "LINE"
+    elif "instagram.com" in url_lower or "instagr.am" in url_lower:
+        return "Instagram"
+    elif "facebook.com" in url_lower or "fb.watch" in url_lower or "fb.com" in url_lower:
+        return "Facebook"
+    elif "tiktok.com" in url_lower:
+        return "TikTok"
+    return "None"
+
+
+def create_platform_icon(platform: str, size: int) -> Image.Image:
+    """Generates a clean vector-like Brand Icon PIL Image."""
+    icon = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(icon)
+    margin = int(size * 0.05)
+
+    if platform == "YouTube":
+        # Red rounded box + white play triangle
+        draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.25), fill="#FF0000")
+        poly = [
+            (int(size * 0.38), int(size * 0.28)),
+            (int(size * 0.38), int(size * 0.72)),
+            (int(size * 0.72), int(size * 0.50)),
+        ]
+        draw.polygon(poly, fill="#FFFFFF")
+
+    elif platform == "LINE":
+        # Green rounded box + white speech bubble text
+        draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.25), fill="#06C755")
+        draw.ellipse([int(size * 0.15), int(size * 0.20), int(size * 0.85), int(size * 0.75)], fill="#FFFFFF")
+        poly = [(int(size * 0.30), int(size * 0.65)), (int(size * 0.20), int(size * 0.82)), (int(size * 0.45), int(size * 0.70))]
+        draw.polygon(poly, fill="#FFFFFF")
+        draw.text((int(size * 0.26), int(size * 0.33)), "LINE", fill="#06C755")
+
+    elif platform == "Facebook":
+        # Blue circle + white 'f'
+        draw.ellipse([margin, margin, size - margin, size - margin], fill="#1877F2")
+        draw.text((int(size * 0.38), int(size * 0.12)), "f", fill="#FFFFFF")
+
+    elif platform == "Instagram":
+        # Gradient/Purple rounded box + white camera rings
+        draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.30), fill="#E1306C")
+        draw.rounded_rectangle([int(size * 0.25), int(size * 0.25), int(size * 0.75), int(size * 0.75)], radius=int(size * 0.15), outline="#FFFFFF", width=max(2, int(size * 0.06)))
+        draw.ellipse([int(size * 0.40), int(size * 0.40), int(size * 0.60), int(size * 0.60)], outline="#FFFFFF", width=max(2, int(size * 0.06)))
+        draw.ellipse([int(size * 0.62), int(size * 0.32), int(size * 0.68), int(size * 0.38)], fill="#FFFFFF")
+
+    elif platform == "TikTok":
+        # Dark background + music note
+        draw.rounded_rectangle([margin, margin, size - margin, size - margin], radius=int(size * 0.25), fill="#000000")
+        draw.ellipse([int(size * 0.30), int(size * 0.55), int(size * 0.55), int(size * 0.78)], fill="#25F4EE")
+        draw.rectangle([int(size * 0.48), int(size * 0.25), int(size * 0.58), int(size * 0.65)], fill="#25F4EE")
+        draw.rectangle([int(size * 0.58), int(size * 0.25), int(size * 0.78), int(size * 0.40)], fill="#FE2C55")
+
+    return icon
+
+
+def embed_bottom_icon(qr_img: Image.Image, platform: str, fill_color: str, back_color: str) -> Image.Image:
+    """Overlays small brand logo at bottom-center inside QR image with clean background pad."""
+    if platform == "None":
+        return qr_img
+
+    qr_w, qr_h = qr_img.size
+    icon_size = int(qr_w * 0.12)  # Small subtle icon (12% of QR size)
+    
+    # Calculate Bottom-Center position (leaving space for outer QR border)
+    x = (qr_w - icon_size) // 2
+    y = int(qr_h * 0.80) - (icon_size // 2)
+
+    # White/Custom background badge behind icon to keep QR scannable
+    pad = max(2, int(icon_size * 0.12))
+    bg_badge = Image.new("RGBA", (icon_size + pad * 2, icon_size + pad * 2), (0, 0, 0, 0))
+    bg_draw = ImageDraw.Draw(bg_badge)
+    bg_draw.rounded_rectangle([0, 0, icon_size + pad * 2, icon_size + pad * 2], radius=int(icon_size * 0.2), fill=back_color)
+
+    icon_img = create_platform_icon(platform, icon_size)
+
+    # Paste badge & icon onto QR Image
+    qr_img.paste(bg_badge, (x - pad, y - pad), bg_badge)
+    qr_img.paste(icon_img, (x, y), icon_img)
+
+    return qr_img
+
+
 # --- Helper Functions & Security Checks ---
 def validate_url(url: str) -> bool:
-    """Checks if the given string is a valid HTTP/HTTPS URL structure."""
     try:
         result = urlparse(url)
         return all([result.scheme in ("http", "https"), result.netloc])
@@ -48,7 +139,6 @@ def validate_url(url: str) -> bool:
 
 
 def check_security_warnings(url: str) -> list[str]:
-    """Inspects URL for potential security or usability issues (SSRF / Data Length)."""
     warnings = []
     try:
         parsed = urlparse(url)
@@ -81,8 +171,9 @@ def generate_raster_qr(
     back_color: str = "#FFFFFF",
     error_correction_key: str = "Medium (15%)",
     fmt: str = "PNG",
+    platform_icon: str = "Auto-Detect",
 ) -> bytes:
-    """Generates ultra-crisp Raster QR Codes (PNG, JPG, WEBP)."""
+    """Generates ultra-crisp Raster QR Codes with Optional Bottom Brand Icon."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
@@ -92,18 +183,28 @@ def generate_raster_qr(
     qr.add_data(data)
     qr.make(fit=True)
 
-    qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGB")
+    qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGBA")
 
     if target_size != qr_img.size[0]:
         qr_img = qr_img.resize((target_size, target_size), Image.Resampling.NEAREST)
+
+    # Detect platform icon
+    active_platform = platform_icon
+    if platform_icon == "Auto-Detect":
+        active_platform = detect_platform(data)
+
+    if active_platform != "None":
+        qr_img = embed_bottom_icon(qr_img, active_platform, fill_color, back_color)
+
+    final_img = qr_img.convert("RGB")
 
     with BytesIO() as buffer:
         save_fmt = fmt.upper()
         if save_fmt == "JPG":
             save_fmt = "JPEG"
-            qr_img.save(buffer, format=save_fmt, quality=100, subsampling=0)
+            final_img.save(buffer, format=save_fmt, quality=100, subsampling=0)
         else:
-            qr_img.save(buffer, format=save_fmt, quality=100)
+            final_img.save(buffer, format=save_fmt, quality=100)
             
         return buffer.getvalue()
 
@@ -252,7 +353,6 @@ def inject_custom_css() -> None:
     st.markdown(
         """
         <style>
-        /* Force Download Button Wrapper and Button to 100% full width */
         div[data-testid="stDownloadButton"],
         div[data-testid="stDownloadButton"] > button,
         div.stDownloadButton,
@@ -268,7 +368,6 @@ def inject_custom_css() -> None:
             margin: 0 !important;
         }
 
-        /* Image Display Crispness */
         div[data-testid="stImage"] > img {
             image-rendering: pixelated !important;
             image-rendering: -moz-crisp-edges !important;
@@ -288,14 +387,14 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("High-Resolution Vector & Raster Image Support with Full Security Checks")
+    st.caption("High-Resolution Vector & Raster Image Support with Auto Brand Icon Embedding")
 
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
 
     raw_url = st.text_input(
         "Enter your link here:",
-        placeholder="https://example.com",
+        placeholder="https://www.youtube.com/watch?v=...",
         help="Type or paste a valid web address",
         key="url_input",
     )
@@ -311,13 +410,20 @@ def main() -> None:
         for warn in sec_warnings:
             st.warning(warn)
 
-        # Style Customization Expander (Color Picker only)
-        with st.expander("🎨 Customize QR Colors", expanded=False):
+        # Style Customization Expander
+        with st.expander("🎨 Customize QR Colors & Icon", expanded=False):
             col_fg, col_bg = st.columns(2)
             with col_fg:
                 fill_color = st.color_picker("QR Color (จุด QR)", "#000000")
             with col_bg:
                 back_color = st.color_picker("Background Color (พื้นหลัง)", "#FFFFFF")
+
+            icon_option = st.selectbox(
+                "Bottom Brand Icon (ไอคอนช่องทางตรงกลางล่าง):",
+                options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None"],
+                index=0,
+                help="ระบบจะตรวจจับจาก URL อัตโนมัติ หรือเลือกเปลี่ยนโลโก้ตามต้องการได้ครับ",
+            )
 
         # Centered Format Selector
         _, center_fmt_col, _ = st.columns([0.2, 2.6, 0.2])
@@ -344,19 +450,24 @@ def main() -> None:
         try:
             st.markdown("---")
 
-            # Initialize Error Correction key in session_state if missing
             if "ec_level" not in st.session_state:
                 st.session_state.ec_level = "Medium (15%)"
 
-            # Generate PNG binary specifically for Preview and Image Copying
+            # Auto-increase error correction level if an icon is embedded to keep QR 100% scannable
+            active_platform = icon_option if icon_option != "Auto-Detect" else detect_platform(clean_url)
+            effective_ec = st.session_state.ec_level
+            if active_platform != "None" and effective_ec in ("Low (7%)", "Medium (15%)"):
+                effective_ec = "Quartile (25%)"
+
             render_px = max(target_px, 1000) if not is_vector else 1000
             png_bytes_for_copy = generate_raster_qr(
                 clean_url,
                 target_size=render_px,
                 fill_color=fill_color,
                 back_color=back_color,
-                error_correction_key=st.session_state.ec_level,
+                error_correction_key=effective_ec,
                 fmt="PNG",
+                platform_icon=icon_option,
             )
 
             caption_text = "Preview (SVG Vector - Infinite Resolution)" if is_vector else f"Preview ({target_px}px x {target_px}px)"
@@ -372,7 +483,7 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-            # Right Column: Stacked Buttons & Error Correction Underneath
+            # Right Column: Action Buttons & Error Correction Underneath
             with col_right:
                 st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
 
@@ -381,7 +492,7 @@ def main() -> None:
                     svg_data = generate_svg_qr(
                         clean_url,
                         fill_color=fill_color,
-                        error_correction_key=st.session_state.ec_level,
+                        error_correction_key=effective_ec,
                     )
                     st.download_button(
                         label="📥 Download SVG",
@@ -402,8 +513,9 @@ def main() -> None:
                         target_size=target_px,
                         fill_color=fill_color,
                         back_color=back_color,
-                        error_correction_key=st.session_state.ec_level,
+                        error_correction_key=effective_ec,
                         fmt=file_format,
+                        platform_icon=icon_option,
                     )
                     st.download_button(
                         label=f"📥 Download {file_format}",
@@ -431,7 +543,7 @@ def main() -> None:
                     "Error Correction (การฟื้นฟูข้อมูล):",
                     options=list(ERROR_CORRECTION_MAP.keys()),
                     key="ec_level",
-                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
+                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบ ชำรุด หรือมีการแปะ Logo",
                 )
 
         except Exception as err:
