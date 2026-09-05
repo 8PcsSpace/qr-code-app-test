@@ -1,13 +1,16 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Side-by-side action buttons (Download on Left, Copy on Right).
-- Pixel-perfect crisp QR rendering (No blurring).
-- Format selector with PNG, JPG, WEBP, and Vector SVG support.
+- Beautiful action bar with 3 synchronized buttons:
+  1. Download File (PNG/JPG/WEBP/SVG)
+  2. Copy Image directly to Clipboard (ClipboardItem API)
+  3. Copy Text URL to Clipboard
+- Pixel-perfect crisp QR rendering with HiDPI support.
 - Persistent Resolution Slider up to 4000px Ultra HD.
-- Full security checks for URLs.
+- Security and validation checks for URLs.
 """
 
+import base64
 from io import BytesIO
 import ipaddress
 import logging
@@ -131,56 +134,137 @@ def generate_svg_qr(
         return buffer.getvalue().decode("utf-8")
 
 
-def render_copy_button(text_to_copy: str) -> None:
-    """Renders a right-aligned Copy to Clipboard button matching Streamlit style."""
+def render_copy_image_button(img_bytes: bytes) -> None:
+    """Renders a custom HTML/JS button that copies the actual PNG image to system clipboard."""
+    b64_img = base64.b64encode(img_bytes).decode("utf-8")
+    
     html_code = f"""
-    <div style="display: flex; width: 100%;">
-        <button id="copyBtn" onclick="copyToClipboard()" style="
+    <style>
+        body {{ margin: 0; padding: 0; background: transparent; }}
+        .btn {{
             width: 100%;
-            background-color: #4CAF50;
+            height: 42px;
+            background-color: #2196F3;
             color: white;
-            padding: 9px 12px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             box-shadow: 0px 2px 4px rgba(0,0,0,0.15);
-            transition: all 0.2s ease-in-out;
-            height: 42px;
-        ">📋 Copy URL</button>
-    </div>
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }}
+        .btn:hover {{ background-color: #1976D2; }}
+    </style>
+
+    <button id="copyImgBtn" class="btn" onclick="copyImageToClipboard()">🖼️ Copy Image</button>
 
     <script>
-    function copyToClipboard() {{
-        navigator.clipboard.writeText("{text_to_copy}").then(function() {{
-            var btn = document.getElementById('copyBtn');
+    async function copyImageToClipboard() {{
+        const btn = document.getElementById('copyImgBtn');
+        try {{
+            const base64Data = "data:image/png;base64,{b64_img}";
+            const response = await fetch(base64Data);
+            const blob = await response.blob();
+
+            await navigator.clipboard.write([
+                new ClipboardItem({{ 'image/png': blob }})
+            ]);
+
             btn.innerText = '✅ Copied!';
             btn.style.backgroundColor = '#2E7D32';
-            setTimeout(function() {{
-                btn.innerText = '📋 Copy URL';
+            setTimeout(() => {{
+                btn.innerText = '🖼️ Copy Image';
+                btn.style.backgroundColor = '#2196F3';
+            }}, 2000);
+        }} catch (err) {{
+            console.error('Failed to copy image: ', err);
+            btn.innerText = '❌ Failed';
+            btn.style.backgroundColor = '#D32F2F';
+            setTimeout(() => {{
+                btn.innerText = '🖼️ Copy Image';
+                btn.style.backgroundColor = '#2196F3';
+            }}, 2000);
+        }}
+    }}
+    </script>
+    """
+    components.html(html_code, height=45)
+
+
+def render_copy_url_button(text_to_copy: str) -> None:
+    """Renders a custom HTML/JS button that copies URL text to system clipboard."""
+    html_code = f"""
+    <style>
+        body {{ margin: 0; padding: 0; background: transparent; }}
+        .btn {{
+            width: 100%;
+            height: 42px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.15);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }}
+        .btn:hover {{ background-color: #388E3C; }}
+    </style>
+
+    <button id="copyUrlBtn" class="btn" onclick="copyUrlToClipboard()">🔗 Copy URL</button>
+
+    <script>
+    function copyUrlToClipboard() {{
+        const btn = document.getElementById('copyUrlBtn');
+        navigator.clipboard.writeText("{text_to_copy}").then(() => {{
+            btn.innerText = '✅ Copied!';
+            btn.style.backgroundColor = '#2E7D32';
+            setTimeout(() => {{
+                btn.innerText = '🔗 Copy URL';
+                btn.style.backgroundColor = '#4CAF50';
+            }}, 2000);
+        }}).catch(err => {{
+            btn.innerText = '❌ Failed';
+            btn.style.backgroundColor = '#D32F2F';
+            setTimeout(() => {{
+                btn.innerText = '🔗 Copy URL';
                 btn.style.backgroundColor = '#4CAF50';
             }}, 2000);
         }});
     }}
     </script>
     """
-    components.html(html_code, height=48)
+    components.html(html_code, height=45)
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to style buttons and sharpen image preview."""
+    """Injects custom CSS to equalize heights and clean up layout."""
     st.markdown(
         """
         <style>
+        /* Uniform Download Button Styling */
         div.stDownloadButton > button {
             width: 100% !important;
             height: 42px !important;
-            font-size: 14px !important;
+            font-size: 13px !important;
             font-weight: 600 !important;
             border-radius: 8px !important;
+            margin: 0 !important;
         }
 
+        /* Image Display Crispness */
         div[data-testid="stImage"] {
             display: flex;
             justify-content: center;
@@ -266,70 +350,73 @@ def main() -> None:
         try:
             render_px = max(target_px, 1000) if not is_vector else 1000
 
-            display_bytes = generate_raster_qr(
+            # Generate PNG binary specifically for Preview and Image Copying
+            png_bytes_for_copy = generate_raster_qr(
                 clean_url,
                 target_size=render_px,
                 fill_color=fill_color,
                 back_color=back_color,
                 error_correction_key=error_correction,
-                fmt="PNG" if is_vector else file_format,
+                fmt="PNG",
             )
 
             caption_text = "Preview (SVG Vector - Infinite Resolution)" if is_vector else f"Preview ({target_px}px x {target_px}px)"
 
             st.markdown("---")
 
-            # Center Container for Image & Buttons
-            _, center_col, _ = st.columns([0.4, 2.2, 0.4])
+            # Main Preview Container
+            st.image(
+                png_bytes_for_copy,
+                caption=caption_text,
+                width=380,
+            )
 
-            with center_col:
-                st.image(
-                    display_bytes,
-                    caption=caption_text,
-                    use_container_width=True,
-                )
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
 
-                # Layout: Left = Download Button | Right = Copy Button
-                btn_col_left, btn_col_right = st.columns(2)
+            # Balanced 3-Button Action Layout
+            b1, b2, b3 = st.columns(3)
 
-                with btn_col_left:
-                    if is_vector:
-                        svg_data = generate_svg_qr(
-                            clean_url,
-                            fill_color=fill_color,
-                            error_correction_key=error_correction,
-                        )
-                        st.download_button(
-                            label="📥 Download SVG",
-                            data=svg_data,
-                            file_name="qr_code.svg",
-                            mime="image/svg+xml",
-                            type="primary",
-                        )
-                    else:
-                        mime_map = {
-                            "PNG": "image/png",
-                            "JPG": "image/jpeg",
-                            "WEBP": "image/webp",
-                        }
-                        download_bytes = generate_raster_qr(
-                            clean_url,
-                            target_size=target_px,
-                            fill_color=fill_color,
-                            back_color=back_color,
-                            error_correction_key=error_correction,
-                            fmt=file_format,
-                        )
-                        st.download_button(
-                            label=f"📥 Download {file_format}",
-                            data=download_bytes,
-                            file_name=f"qr_code_{target_px}px.{file_format.lower()}",
-                            mime=mime_map.get(file_format, "image/png"),
-                            type="primary",
-                        )
+            with b1:
+                if is_vector:
+                    svg_data = generate_svg_qr(
+                        clean_url,
+                        fill_color=fill_color,
+                        error_correction_key=error_correction,
+                    )
+                    st.download_button(
+                        label="📥 Download SVG",
+                        data=svg_data,
+                        file_name="qr_code.svg",
+                        mime="image/svg+xml",
+                        type="primary",
+                    )
+                else:
+                    mime_map = {
+                        "PNG": "image/png",
+                        "JPG": "image/jpeg",
+                        "WEBP": "image/webp",
+                    }
+                    download_bytes = generate_raster_qr(
+                        clean_url,
+                        target_size=target_px,
+                        fill_color=fill_color,
+                        back_color=back_color,
+                        error_correction_key=error_correction,
+                        fmt=file_format,
+                    )
+                    st.download_button(
+                        label=f"📥 Download {file_format}",
+                        data=download_bytes,
+                        file_name=f"qr_code_{target_px}px.{file_format.lower()}",
+                        mime=mime_map.get(file_format, "image/png"),
+                        type="primary",
+                    )
 
-                with btn_col_right:
-                    render_copy_button(clean_url)
+            with b2:
+                render_copy_image_button(png_bytes_for_copy)
+
+            with b3:
+                render_copy_url_button(clean_url)
 
         except Exception as err:
             logger.error("Failed to generate QR: %s", err)
