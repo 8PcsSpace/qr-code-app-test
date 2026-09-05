@@ -23,7 +23,7 @@ elif option == "Upload Image":
         if st.button("Generate QR from Image"):
             with st.spinner("Processing & Uploading image..."):
                 try:
-                    # ย่อขนาดรูปภาพก่อนส่งเพื่อป้องกันไฟล์ใหญ่เกินไป
+                    # 1. ย่อขนาดรูปภาพก่อนส่ง
                     img_pil = Image.open(uploaded_file)
                     img_pil.thumbnail((1024, 1024))
                     
@@ -31,21 +31,22 @@ elif option == "Upload Image":
                     img_pil.save(img_byte_arr, format='JPEG', quality=85)
                     img_bytes = img_byte_arr.getvalue()
 
-                    # ส่งไฟล์ไปยัง Catbox.moe
-                    files = {
-                        'reqtype': (None, 'fileupload'),
-                        'fileToUpload': ('image.jpg', img_bytes, 'image/jpeg')
-                    }
-                    response = requests.post("https://catbox.moe/user/api.php", files=files)
+                    # 2. ส่งไฟล์ไปยัง tmpfiles.org
+                    files = {'file': ('image.jpg', img_bytes, 'image/jpeg')}
+                    response = requests.post("https://tmpfiles.org/api/v1/upload", files=files)
                     
-                    if response.status_code == 200 and response.text.startswith("http"):
-                        user_link = response.text.strip()
+                    if response.status_code == 200:
+                        res_data = response.json()
+                        # แปลง URL ให้อยู่ในรูปแบบ Direct Link สำหรับเปิดดูรูปภาพได้ทันที
+                        raw_url = res_data["data"]["url"]
+                        user_link = raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
                         st.success("Image uploaded successfully!")
                     else:
-                        st.error(f"Failed to upload image. Server response: {response.text}")
+                        st.error("Failed to upload image. Please try again.")
                 except Exception as e:
                     st.error(f"Error processing image: {e}")
 
+# ส่วนสร้าง QR Code
 if user_link:
     qr = qrcode.QRCode(
         version=1,
