@@ -1,7 +1,7 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
-Focused exclusively on URL/Text-to-QR Code generation.
-Optimized for high performance, type safety, and low memory usage.
+Configured for instant real-time QR code generation upon pasting URLs,
+eliminating the need to press Enter.
 """
 
 from dataclasses import dataclass
@@ -99,19 +99,21 @@ def get_qr_engine() -> QRCodeEngine:
 def main() -> None:
     st.set_page_config(page_title="URL to QR Code Generator", page_icon="🔗")
     st.title("URL to QR Code Generator 🔗")
-    st.caption("Fast & Secure QR Code Generator")
+    st.caption("Fast & Instant QR Code Generator")
 
     qr_engine = get_qr_engine()
 
+    # ดึงค่าตรงจาก text_input ซึ่ง Streamlit จะอัปเดต state ทันทีที่มีการวางข้อความ (Paste)
     raw_url = st.text_input(
         "Enter your link here:",
         placeholder="https://example.com",
-        help="Type or paste a valid web address starting with http:// or https://"
+        help="Type or paste a valid web address",
+        key="url_input"
     )
 
-    if raw_url:
-        clean_url = raw_url.strip()
-        
+    clean_url = raw_url.strip()
+
+    if clean_url:
         if not validate_url(clean_url):
             st.warning("⚠️ Please enter a valid URL (e.g., https://example.com)")
             return
