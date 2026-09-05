@@ -1,11 +1,9 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Side-by-side Layout: QR Preview on the Left, Action Panel on the Right.
-- Stacked Action Buttons (Top to Bottom):
-  1. Download File (PNG/JPG/WEBP/SVG)
-  2. Copy Image directly to Clipboard
-  3. Copy Text URL to Clipboard
+- Full-width aligned action buttons on the right panel (Download, Copy Image, Copy URL).
+- Relocated Error Correction selector placed right below the action buttons.
+- Side-by-side Layout: QR Preview on the Left, Controls on the Right.
 - High-definition crisp QR rendering.
 - Persistent Resolution Slider up to 4000px Ultra HD.
 - Full security checks for URLs.
@@ -251,11 +249,11 @@ def render_copy_url_button(text_to_copy: str) -> None:
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to equalize button heights and clean up right side panel."""
+    """Injects custom CSS to equalize button widths and clean up layout."""
     st.markdown(
         """
         <style>
-        /* Download Button full width styling */
+        /* Force Download Button to take full container width */
         div.stDownloadButton {
             width: 100% !important;
         }
@@ -311,19 +309,13 @@ def main() -> None:
         for warn in sec_warnings:
             st.warning(warn)
 
-        with st.expander("🎨 Customize QR Code Style & Quality", expanded=False):
+        # Style Customization Expander (Color Picker only)
+        with st.expander("🎨 Customize QR Colors", expanded=False):
             col_fg, col_bg = st.columns(2)
             with col_fg:
                 fill_color = st.color_picker("QR Color (จุด QR)", "#000000")
             with col_bg:
                 back_color = st.color_picker("Background Color (พื้นหลัง)", "#FFFFFF")
-
-            error_correction = st.selectbox(
-                "Error Correction (ความสามารถในการฟื้นฟูข้อมูล):",
-                options=list(ERROR_CORRECTION_MAP.keys()),
-                index=1,
-                help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
-            )
 
         # Centered Format Selector
         _, center_fmt_col, _ = st.columns([0.2, 2.6, 0.2])
@@ -348,9 +340,23 @@ def main() -> None:
         )
 
         try:
-            render_px = max(target_px, 1000) if not is_vector else 1000
+            st.markdown("---")
+
+            # Split Layout: Left Column (Preview) | Right Column (Actions & Settings)
+            col_left, col_right = st.columns([1.2, 1], gap="medium")
+
+            # Place Error Correction Selector in Right Column First (so state updates instantly)
+            with col_right:
+                error_correction = st.selectbox(
+                    "Error Correction (ความสามารถในการฟื้นฟูข้อมูล):",
+                    options=list(ERROR_CORRECTION_MAP.keys()),
+                    index=1,
+                    help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
+                    key="error_correction_select",
+                )
 
             # Generate PNG binary specifically for Preview and Image Copying
+            render_px = max(target_px, 1000) if not is_vector else 1000
             png_bytes_for_copy = generate_raster_qr(
                 clean_url,
                 target_size=render_px,
@@ -362,11 +368,6 @@ def main() -> None:
 
             caption_text = "Preview (SVG Vector - Infinite Resolution)" if is_vector else f"Preview ({target_px}px x {target_px}px)"
 
-            st.markdown("---")
-
-            # Split Layout: Left Column (Preview Image) | Right Column (Stacked Buttons)
-            col_left, col_right = st.columns([1.2, 1], gap="medium")
-
             # Left Column: Image Preview
             with col_left:
                 st.image(
@@ -375,11 +376,11 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-            # Right Column: Stacked Actions (1. Download, 2. Copy Image, 3. Copy URL)
+            # Right Column: Action Buttons + Error Correction below Copy URL
             with col_right:
                 st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
-                
-                # 1. Download Button (Top)
+
+                # 1. Full-width Download Button (Top)
                 if is_vector:
                     svg_data = generate_svg_qr(
                         clean_url,
@@ -415,12 +416,12 @@ def main() -> None:
                         type="primary",
                     )
 
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True)
 
                 # 2. Copy Image Button (Middle)
                 render_copy_image_button(png_bytes_for_copy)
 
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-top: 6px;'></div>", unsafe_allow_html=True)
 
                 # 3. Copy URL Button (Bottom)
                 render_copy_url_button(clean_url)
