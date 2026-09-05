@@ -7,7 +7,7 @@ Features:
 """
 
 from dataclasses import dataclass
-from io import BytesIO, StringIO
+from io import BytesIO
 import logging
 from typing import Final, Optional
 from urllib.parse import urlparse
@@ -43,7 +43,6 @@ class QRCodeGenerationError(QRAppException):
 class QRCodeConfig:
     version: int = 1
     error_correction: int = qrcode.constants.ERROR_CORRECT_M
-    box_size: int = 10
     border: int = 4
     fill_color: str = "black"
     back_color: str = "white"
@@ -56,12 +55,13 @@ class QRCodeEngine:
     def __init__(self, config: Optional[QRCodeConfig] = None) -> None:
         self._config = config or QRCodeConfig()
 
-    def generate_png(self, data: str, box_size: int) -> bytes:
+    def generate_png(self, data: str, box_size: int = 10) -> bytes:
         """Renders high-definition PNG binary stream."""
         if not data.strip():
             raise InvalidInputError("Payload data cannot be empty.")
 
         try:
+            # กำหนด box_size ในตัวสร้าง QRCode โดยตรง
             qr = QRCode(
                 version=self._config.version,
                 error_correction=self._config.error_correction,
@@ -92,7 +92,7 @@ class QRCodeEngine:
             qr = QRCode(
                 version=self._config.version,
                 error_correction=self._config.error_correction,
-                box_size=self._config.box_size,
+                box_size=10,
                 border=self._config.border,
                 image_factory=SvgPathImage,
             )
@@ -161,7 +161,6 @@ def main() -> None:
             st.warning("⚠️ Please enter a valid URL (e.g., https://example.com)")
             return
 
-        # Settings Options for Resolution & Vector Output
         col_res, col_fmt = st.columns(2)
         with col_res:
             resolution = st.select_slider(
@@ -176,7 +175,6 @@ def main() -> None:
                 horizontal=True,
             )
 
-        # Map selected resolution option to box sizes
         box_size_map = {
             "Standard (500px)": 10,
             "High HD (1000px)": 20,
@@ -185,12 +183,10 @@ def main() -> None:
         selected_box_size = box_size_map[resolution]
 
         try:
-            # Generate previews and buffers
             png_preview_bytes = qr_engine.generate_png(clean_url, box_size=10)
 
             st.markdown("---")
             
-            # Center Alignment using layout columns
             _, center_col, _ = st.columns([1, 2, 1])
 
             with center_col:
