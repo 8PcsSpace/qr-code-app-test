@@ -1,20 +1,19 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Features:
-- Instant real-time QR generation (No Enter required).
-- High-definition image scaling & Vector format export (SVG/PNG).
-- Center-aligned Streamlit UI layout.
+- Instant real-time QR generation.
+- High-definition image scaling & Vector SVG export.
+- Center-aligned UI.
 """
 
-from dataclasses import dataclass
-from io import BytesIO
+from io import BytesIO, StringIO
 import logging
-from typing import Final, Optional
+from typing import Final
 from urllib.parse import urlparse
 
+from PIL import Image
 import qrcode
-from qrcode.image.svg import SvgPathImage
-from qrcode.main import QRCode
+import qrcode.image.svg
 import streamlit as st
 
 # Setup Logging
@@ -23,89 +22,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger("QRCodeApp")
-
-
-# --- Custom Exceptions ---
-class QRAppException(Exception):
-    """Base Exception for application domain."""
-
-
-class InvalidInputError(QRAppException):
-    """Raised when URL input validation fails."""
-
-
-class QRCodeGenerationError(QRAppException):
-    """Raised when QR generation fails."""
-
-
-# --- Domain Models ---
-@dataclass(frozen=True, slots=True)
-class QRCodeConfig:
-    version: int = 1
-    error_correction: int = qrcode.constants.ERROR_CORRECT_M
-    border: int = 4
-    fill_color: str = "black"
-    back_color: str = "white"
-
-
-# --- Service Layer ---
-class QRCodeEngine:
-    """Engine responsible for rendering high-res PNG and vector SVG QR codes."""
-
-    def __init__(self, config: Optional[QRCodeConfig] = None) -> None:
-        self._config = config or QRCodeConfig()
-
-    def generate_png(self, data: str, box_size: int = 10) -> bytes:
-        """Renders high-definition PNG binary stream."""
-        if not data.strip():
-            raise InvalidInputError("Payload data cannot be empty.")
-
-        try:
-            # กำหนด box_size ในตัวสร้าง QRCode โดยตรง
-            qr = QRCode(
-                version=self._config.version,
-                error_correction=self._config.error_correction,
-                box_size=box_size,
-                border=self._config.border,
-            )
-            qr.add_data(data)
-            qr.make(fit=True)
-
-            img = qr.make_image(
-                fill_color=self._config.fill_color,
-                back_color=self._config.back_color,
-            )
-
-            with BytesIO() as buffer:
-                img.save(buffer, format="PNG")
-                return buffer.getvalue()
-        except Exception as exc:
-            logger.error("PNG QR Generation failed: %s", exc)
-            raise QRCodeGenerationError("Failed to render PNG QR Code.") from exc
-
-    def generate_svg(self, data: str) -> str:
-        """Renders infinite-scale Vector SVG string."""
-        if not data.strip():
-            raise InvalidInputError("Payload data cannot be empty.")
-
-        try:
-            qr = QRCode(
-                version=self._config.version,
-                error_correction=self._config.error_correction,
-                box_size=10,
-                border=self._config.border,
-                image_factory=SvgPathImage,
-            )
-            qr.add_data(data)
-            qr.make(fit=True)
-
-            img = qr.make_image()
-            buffer = BytesIO()
-            img.save(buffer)
-            return buffer.getvalue().decode("utf-8")
-        except Exception as exc:
-            logger.error("SVG Vector Generation failed: %s", exc)
-            raise QRCodeGenerationError("Failed to render SVG Vector QR Code.") from exc
 
 
 # --- Helper Functions ---
@@ -118,8 +34,31 @@ def validate_url(url: str) -> bool:
         return False
 
 
+def generate_png_qr(data: str, target_size: int = 500) -> bytes:
+    """Generates a PNG QR Code and resizes it cleanly to target resolution."""
+    qr_img = qrcode.make(data)
+    
+    # Resize image to targeted resolution with high quality filtering
+    if target_size != qr_img.size[0]:
+        qr_img = qr_img.resize((target_size, target_size), Image.Resampling.LANCZOS)
+    
+    with BytesIO() as buffer:
+        qr_img.save(buffer, format="PNG")
+        return buffer.getvalue()
+
+
+def generate_svg_qr(data: str) -> str:
+    """Generates an infinite-scale Vector SVG string."""
+    factory = qrcode.image.svg.SvgPathImage
+    svg_img = qrcode.make(data, image_factory=factory)
+    
+    with BytesIO() as buffer:
+        svg_img.save(buffer)
+        return buffer.getvalue().decode("utf-8")
+
+
 def inject_custom_css() -> None:
-    """Injects custom CSS to center controls and elements properly."""
+    """Injects custom CSS to stretch download button across parent container."""
     st.markdown(
         """
         <style>
@@ -133,19 +72,12 @@ def inject_custom_css() -> None:
 
 
 # --- Streamlit Application ---
-@st.cache_resource
-def get_qr_engine() -> QRCodeEngine:
-    return QRCodeEngine()
-
-
 def main() -> None:
     st.set_page_config(page_title="High-Res QR Code Generator", page_icon="🔗", layout="centered")
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
     st.caption("High-Resolution Vector & Raster Image Support")
-
-    qr_engine = get_qr_engine()
 
     raw_url = st.text_input(
         "Enter your link here:",
@@ -164,7 +96,7 @@ def main() -> None:
         col_res, col_fmt = st.columns(2)
         with col_res:
             resolution = st.select_slider(
-                "PNG Resolution (คมชัดสูงสุด):",
+                "PNG Resolution (ความคมชัด):",
                 options=["Standard (500px)", "High HD (1000px)", "Ultra 4K (2000px)"],
                 value="High HD (1000px)",
             )
@@ -175,25 +107,28 @@ def main() -> None:
                 horizontal=True,
             )
 
-        box_size_map = {
-            "Standard (500px)": 10,
-            "High HD (1000px)": 20,
-            "Ultra 4K (2000px)": 40,
+        # Map options to pixel dimensions
+        dimension_map = {
+            "Standard (500px)": 500,
+            "High HD (1000px)": 1000,
+            "Ultra 4K (2000px)": 2000,
         }
-        selected_box_size = box_size_map[resolution]
+        target_px = dimension_map[resolution]
 
         try:
-            png_preview_bytes = qr_engine.generate_png(clean_url, box_size=10)
+            # Preview QR Code (Lightweight)
+            preview_bytes = generate_png_qr(clean_url, target_size=400)
 
             st.markdown("---")
             
+            # Center alignment layout
             _, center_col, _ = st.columns([1, 2, 1])
 
             with center_col:
-                st.image(png_preview_bytes, caption="Your Generated QR Code", use_container_width=True)
+                st.image(preview_bytes, caption="Your Generated QR Code", use_container_width=True)
 
                 if "SVG" in file_format:
-                    svg_data = qr_engine.generate_svg(clean_url)
+                    svg_data = generate_svg_qr(clean_url)
                     st.download_button(
                         label="📥 Download Vector (SVG)",
                         data=svg_data,
@@ -202,17 +137,18 @@ def main() -> None:
                         type="primary",
                     )
                 else:
-                    png_hd_bytes = qr_engine.generate_png(clean_url, box_size=selected_box_size)
+                    png_hd_bytes = generate_png_qr(clean_url, target_size=target_px)
                     st.download_button(
-                        label=f"📥 Download PNG ({resolution.split()[0]})",
+                        label=f"📥 Download PNG ({target_px}px)",
                         data=png_hd_bytes,
-                        file_name="qr_code.png",
+                        file_name=f"qr_code_{target_px}px.png",
                         mime="image/png",
                         type="primary",
                     )
 
-        except QRCodeGenerationError as err:
-            st.error(f"Error: {err}")
+        except Exception as err:
+            logger.error("Failed to generate QR: %s", err)
+            st.error("An error occurred while generating the QR code.")
 
 
 if __name__ == "__main__":
