@@ -1,8 +1,9 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Persistent Resolution Slider State (No unwanted auto-reset to 1000).
-- Centered Format Selector & Conditional Disabled Slider.
+- High-Clarity Image Preview rendering (Optimized for HiDPI/Retina screens).
+- Perfectly centered Download and Copy buttons.
+- Persistent Resolution Slider State (No unwanted auto-reset).
 - Support for PNG, JPG (100% Quality), WEBP, and Vector SVG formats.
 - High-precision resolution slider up to 4000px Ultra HD.
 - Full security checks and HTML/JS Clipboard copying component.
@@ -75,7 +76,7 @@ def check_security_warnings(url: str) -> list[str]:
 @st.cache_data(show_spinner=False)
 def generate_raster_qr(
     data: str,
-    target_size: int = 500,
+    target_size: int = 800,
     fill_color: str = "#000000",
     back_color: str = "#FFFFFF",
     error_correction_key: str = "Medium (15%)",
@@ -134,17 +135,22 @@ def generate_svg_qr(
 def render_copy_button(text_to_copy: str) -> None:
     """Renders a JavaScript-powered Copy to Clipboard button component."""
     html_code = f"""
-    <button id="copyBtn" onclick="copyToClipboard()" style="
-        width: 100%;
-        background-color: #4CAF50;
-        color: white;
-        padding: 8px 16px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: bold;
-    ">📋 Copy URL to Clipboard</button>
+    <div style="display: flex; justify-content: center; width: 100%;">
+        <button id="copyBtn" onclick="copyToClipboard()" style="
+            width: 100%;
+            max-width: 320px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0px 2px 5px rgba(0,0,0,0.2);
+            transition: all 0.2s ease-in-out;
+        ">📋 Copy URL to Clipboard</button>
+    </div>
 
     <script>
     function copyToClipboard() {{
@@ -160,7 +166,7 @@ def render_copy_button(text_to_copy: str) -> None:
     }}
     </script>
     """
-    components.html(html_code, height=45)
+    components.html(html_code, height=50)
 
 
 def inject_custom_css() -> None:
@@ -168,8 +174,24 @@ def inject_custom_css() -> None:
     st.markdown(
         """
         <style>
-        .stDownloadButton > button {
+        .stDownloadButton {
+            display: flex;
+            justify-content: center;
             width: 100%;
+        }
+        .stDownloadButton > button {
+            width: 100% !important;
+            max-width: 320px !important;
+            padding: 10px 16px !important;
+            font-size: 15px !important;
+            font-weight: bold !important;
+            border-radius: 6px !important;
+        }
+        div[data-testid="stImage"] > img {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            border-radius: 8px;
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
         }
         </style>
         """,
@@ -246,32 +268,24 @@ def main() -> None:
         )
 
         try:
-            # Generate preview stream
-            if is_vector:
-                display_bytes = generate_raster_qr(
-                    clean_url,
-                    target_size=500,
-                    fill_color=fill_color,
-                    back_color=back_color,
-                    error_correction_key=error_correction,
-                    fmt="PNG",
-                )
-                caption_text = "Preview (SVG Vector - Infinite Resolution)"
-            else:
-                display_bytes = generate_raster_qr(
-                    clean_url,
-                    target_size=target_px,
-                    fill_color=fill_color,
-                    back_color=back_color,
-                    error_correction_key=error_correction,
-                    fmt=file_format,
-                )
-                caption_text = f"Preview ({target_px}px x {target_px}px)"
+            # Generate High-Clarity Preview Stream (At least 800px for sharp display)
+            preview_px = max(800, target_px) if not is_vector else 800
+            
+            display_bytes = generate_raster_qr(
+                clean_url,
+                target_size=preview_px,
+                fill_color=fill_color,
+                back_color=back_color,
+                error_correction_key=error_correction,
+                fmt="PNG" if is_vector else file_format,
+            )
+
+            caption_text = "Preview (SVG Vector - Infinite Resolution)" if is_vector else f"Preview ({target_px}px x {target_px}px)"
 
             st.markdown("---")
 
-            # Center alignment layout
-            _, center_col, _ = st.columns([1, 2, 1])
+            # Center alignment layout for Preview & Buttons
+            _, center_col, _ = st.columns([1, 2.2, 1])
 
             with center_col:
                 st.image(
@@ -280,10 +294,10 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-                # Copy to Clipboard Component
+                # Centered Copy to Clipboard Component
                 render_copy_button(clean_url)
 
-                # Download Buttons according to selected format
+                # Centered Download Button
                 if is_vector:
                     svg_data = generate_svg_qr(
                         clean_url,
@@ -303,9 +317,18 @@ def main() -> None:
                         "JPG": "image/jpeg",
                         "WEBP": "image/webp",
                     }
+                    # Actual file for download generated at target_px
+                    download_bytes = generate_raster_qr(
+                        clean_url,
+                        target_size=target_px,
+                        fill_color=fill_color,
+                        back_color=back_color,
+                        error_correction_key=error_correction,
+                        fmt=file_format,
+                    )
                     st.download_button(
                         label=f"📥 Download {file_format} ({target_px}px)",
-                        data=display_bytes,
+                        data=download_bytes,
                         file_name=f"qr_code_{target_px}px.{file_format.lower()}",
                         mime=mime_map.get(file_format, "image/png"),
                         type="primary",
