@@ -473,7 +473,7 @@ def main() -> None:
 
     raw_url = st.text_input(
         "Enter your link here:",
-        placeholder="https://www.youtube.com/watch?v=...",
+        placeholder="https://example.com",
         help="Type or paste a valid web address",
         key="url_input",
     )
