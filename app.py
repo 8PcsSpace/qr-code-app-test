@@ -1,9 +1,9 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Pixel-perfect crisp QR rendering (No blurring at any resolution).
-- Strictly centered action buttons (Download & Copy to Clipboard).
-- Format selector with support for PNG, JPG, WEBP, and Vector SVG.
+- Side-by-side action buttons (Download on Left, Copy on Right).
+- Pixel-perfect crisp QR rendering (No blurring).
+- Format selector with PNG, JPG, WEBP, and Vector SVG support.
 - Persistent Resolution Slider up to 4000px Ultra HD.
 - Full security checks for URLs.
 """
@@ -93,7 +93,6 @@ def generate_raster_qr(
 
     qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGB")
 
-    # Resize cleanly using NEAREST neighbor to preserve sharp pixel edges
     if target_size != qr_img.size[0]:
         qr_img = qr_img.resize((target_size, target_size), Image.Resampling.NEAREST)
 
@@ -133,24 +132,23 @@ def generate_svg_qr(
 
 
 def render_copy_button(text_to_copy: str) -> None:
-    """Renders a centered JavaScript-powered Copy to Clipboard button component."""
+    """Renders a right-aligned Copy to Clipboard button matching Streamlit style."""
     html_code = f"""
-    <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
+    <div style="display: flex; width: 100%;">
         <button id="copyBtn" onclick="copyToClipboard()" style="
             width: 100%;
-            max-width: 380px;
             background-color: #4CAF50;
             color: white;
-            padding: 10px 16px;
+            padding: 9px 12px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
-            font-weight: bold;
-            box-shadow: 0px 2px 5px rgba(0,0,0,0.2);
+            font-weight: 600;
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.15);
             transition: all 0.2s ease-in-out;
-            margin: 0 auto;
-        ">📋 Copy URL to Clipboard</button>
+            height: 42px;
+        ">📋 Copy URL</button>
     </div>
 
     <script>
@@ -160,39 +158,29 @@ def render_copy_button(text_to_copy: str) -> None:
             btn.innerText = '✅ Copied!';
             btn.style.backgroundColor = '#2E7D32';
             setTimeout(function() {{
-                btn.innerText = '📋 Copy URL to Clipboard';
+                btn.innerText = '📋 Copy URL';
                 btn.style.backgroundColor = '#4CAF50';
             }}, 2000);
         }});
     }}
     </script>
     """
-    components.html(html_code, height=50)
+    components.html(html_code, height=48)
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to strictly center buttons and keep QR image pixel-sharp."""
+    """Injects custom CSS to style buttons and sharpen image preview."""
     st.markdown(
         """
         <style>
-        /* Force Download Button Centering */
-        div.stDownloadButton {
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            width: 100% !important;
-        }
         div.stDownloadButton > button {
             width: 100% !important;
-            max-width: 380px !important;
-            padding: 10px 16px !important;
-            font-size: 15px !important;
-            font-weight: bold !important;
-            border-radius: 6px !important;
-            margin: 0 auto !important;
+            height: 42px !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            border-radius: 8px !important;
         }
 
-        /* Ensure QR Code image has pixel-perfect sharpness without anti-aliasing blur */
         div[data-testid="stImage"] {
             display: flex;
             justify-content: center;
@@ -218,7 +206,6 @@ def main() -> None:
     st.title("URL to QR Code Generator 🔗")
     st.caption("High-Resolution Vector & Raster Image Support with Full Security Checks")
 
-    # Initialize default resolution to 1000px
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
 
@@ -236,12 +223,10 @@ def main() -> None:
             st.warning("⚠️ Please enter a valid URL (e.g., https://example.com)")
             return
 
-        # Security & Error Resilience Warnings
         sec_warnings = check_security_warnings(clean_url)
         for warn in sec_warnings:
             st.warning(warn)
 
-        # Style Customization Accordion
         with st.expander("🎨 Customize QR Code Style & Quality", expanded=False):
             col_fg, col_bg = st.columns(2)
             with col_fg:
@@ -256,7 +241,7 @@ def main() -> None:
                 help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
             )
 
-        # 1. Centered Format Selector
+        # Centered Format Selector
         _, center_fmt_col, _ = st.columns([0.2, 2.6, 0.2])
         with center_fmt_col:
             file_format = st.radio(
@@ -267,7 +252,7 @@ def main() -> None:
 
         is_vector = "SVG" in file_format
 
-        # 2. Resolution Slider
+        # Resolution Slider
         target_px = st.slider(
             "Resolution / ความละเอียดภาพ (px):",
             min_value=250,
@@ -279,7 +264,6 @@ def main() -> None:
         )
 
         try:
-            # Render high-crisp preview image
             render_px = max(target_px, 1000) if not is_vector else 1000
 
             display_bytes = generate_raster_qr(
@@ -295,8 +279,8 @@ def main() -> None:
 
             st.markdown("---")
 
-            # Center Layout Container
-            _, center_col, _ = st.columns([0.5, 2, 0.5])
+            # Center Container for Image & Buttons
+            _, center_col, _ = st.columns([0.4, 2.2, 0.4])
 
             with center_col:
                 st.image(
@@ -305,44 +289,47 @@ def main() -> None:
                     use_container_width=True,
                 )
 
-                # Centered Copy to Clipboard Component
-                render_copy_button(clean_url)
+                # Layout: Left = Download Button | Right = Copy Button
+                btn_col_left, btn_col_right = st.columns(2)
 
-                # Centered Download Button
-                if is_vector:
-                    svg_data = generate_svg_qr(
-                        clean_url,
-                        fill_color=fill_color,
-                        error_correction_key=error_correction,
-                    )
-                    st.download_button(
-                        label="📥 Download Vector (SVG)",
-                        data=svg_data,
-                        file_name="qr_code.svg",
-                        mime="image/svg+xml",
-                        type="primary",
-                    )
-                else:
-                    mime_map = {
-                        "PNG": "image/png",
-                        "JPG": "image/jpeg",
-                        "WEBP": "image/webp",
-                    }
-                    download_bytes = generate_raster_qr(
-                        clean_url,
-                        target_size=target_px,
-                        fill_color=fill_color,
-                        back_color=back_color,
-                        error_correction_key=error_correction,
-                        fmt=file_format,
-                    )
-                    st.download_button(
-                        label=f"📥 Download {file_format} ({target_px}px)",
-                        data=download_bytes,
-                        file_name=f"qr_code_{target_px}px.{file_format.lower()}",
-                        mime=mime_map.get(file_format, "image/png"),
-                        type="primary",
-                    )
+                with btn_col_left:
+                    if is_vector:
+                        svg_data = generate_svg_qr(
+                            clean_url,
+                            fill_color=fill_color,
+                            error_correction_key=error_correction,
+                        )
+                        st.download_button(
+                            label="📥 Download SVG",
+                            data=svg_data,
+                            file_name="qr_code.svg",
+                            mime="image/svg+xml",
+                            type="primary",
+                        )
+                    else:
+                        mime_map = {
+                            "PNG": "image/png",
+                            "JPG": "image/jpeg",
+                            "WEBP": "image/webp",
+                        }
+                        download_bytes = generate_raster_qr(
+                            clean_url,
+                            target_size=target_px,
+                            fill_color=fill_color,
+                            back_color=back_color,
+                            error_correction_key=error_correction,
+                            fmt=file_format,
+                        )
+                        st.download_button(
+                            label=f"📥 Download {file_format}",
+                            data=download_bytes,
+                            file_name=f"qr_code_{target_px}px.{file_format.lower()}",
+                            mime=mime_map.get(file_format, "image/png"),
+                            type="primary",
+                        )
+
+                with btn_col_right:
+                    render_copy_button(clean_url)
 
         except Exception as err:
             logger.error("Failed to generate QR: %s", err)
