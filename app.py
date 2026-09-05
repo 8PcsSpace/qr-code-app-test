@@ -1,7 +1,8 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Centered Format Selector & Conditional Resolution Slider.
+- Persistent Resolution Slider State (No unwanted auto-reset to 1000).
+- Centered Format Selector & Conditional Disabled Slider.
 - Support for PNG, JPG (100% Quality), WEBP, and Vector SVG formats.
 - High-precision resolution slider up to 4000px Ultra HD.
 - Full security checks and HTML/JS Clipboard copying component.
@@ -184,6 +185,10 @@ def main() -> None:
     st.title("URL to QR Code Generator 🔗")
     st.caption("High-Resolution Vector & Raster Image Support with Full Security Checks")
 
+    # Initialize resolution session state to prevent unwanted auto-resets
+    if "resolution_val" not in st.session_state:
+        st.session_state.resolution_val = 1000
+
     raw_url = st.text_input(
         "Enter your link here:",
         placeholder="https://example.com",
@@ -229,12 +234,12 @@ def main() -> None:
 
         is_vector = "SVG" in file_format
 
-        # 2. Resolution Slider Placed Below Format Selector
+        # 2. Persistent Resolution Slider (State-Bound)
         target_px = st.slider(
             "Resolution / ความละเอียดภาพ (px):",
             min_value=250,
             max_value=4000,
-            value=1000,
+            key="resolution_val",
             step=50,
             disabled=is_vector,
             help="สำหรับ SVG จะถูก Fix คุณภาพไว้สูงสุดอัตโนมัติ ไม่จำเป็นต้องปรับขนาดพิกเซล" if is_vector else "ปรับขนาดความละเอียดพิกเซลภาพได้สูงสุดถึง 4000px Ultra HD",
