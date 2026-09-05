@@ -1,72 +1,77 @@
-import streamlit as st
-import qrcode
-from io import BytesIO
-import requests
-from PIL import Image
+# test_app.py
+import pytest
+from unittest.mock import MagicMock, patch
+import httpx
 
-st.title("Online QR Code Generator 🔗")
-st.write("Built with Python and Streamlit")
+from app import (
+    QRCodeEngine,
+    ImgurUploaderService,
+    validate_url,
+    validate_image_stream,
+    InvalidInputError,
+    ImageUploadError,
+)
 
-option = st.radio("Select input type:", ["URL Link", "Upload Image"])
+# --- Unit Tests for Validation ---
+def test_validate_url_valid():
+    assert validate_url("https://www.python.org") is True
+    assert validate_url("http://localhost:8000") is True
 
-user_link = ""
 
-if option == "URL Link":
-    user_link = st.text_input("Enter your link here:", "")
+def test_validate_url_invalid():
+    assert validate_url("ftp://invalid-scheme.com") is False
+    assert validate_url("not-a-url") is False
+    assert validate_url("") is False
 
-elif option == "Upload Image":
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+def test_validate_image_stream_oversized():
+    huge_fake_bytes = b"0" * (6 * 1024 * 1024)  # 6 MB
+    with pytest.raises(InvalidInputError, match="exceeds limit"):
+        validate_image_stream(huge_fake_bytes)
+
+
+# --- Unit Tests for QR Engine ---
+def test_qr_code_generation_success():
+    engine = QRCodeEngine()
+    result_bytes = engine.generate_qr("https://example.com")
     
-    if uploaded_file is not None:
-        st.image(uploaded_file, caption="Preview Image", width=200)
-        
-        if st.button("Generate QR from Image"):
-            with st.spinner("Processing & Uploading image..."):
-                try:
-                    # 1. ย่อขนาดรูปภาพก่อนส่ง
-                    img_pil = Image.open(uploaded_file)
-                    img_pil.thumbnail((1024, 1024))
-                    
-                    img_byte_arr = BytesIO()
-                    img_pil.save(img_byte_arr, format='JPEG', quality=85)
-                    img_bytes = img_byte_arr.getvalue()
+    assert isinstance(result_bytes, bytes)
+    assert len(result_bytes) > 0
+    assert result_bytes.startswith(b"\x89PNG")  # PNG Magic Bytes Check
 
-                    # 2. ส่งไฟล์ไปยัง tmpfiles.org
-                    files = {'file': ('image.jpg', img_bytes, 'image/jpeg')}
-                    response = requests.post("https://tmpfiles.org/api/v1/upload", files=files)
-                    
-                    if response.status_code == 200:
-                        res_data = response.json()
-                        # แปลง URL ให้อยู่ในรูปแบบ Direct Link สำหรับเปิดดูรูปภาพได้ทันที
-                        raw_url = res_data["data"]["url"]
-                        user_link = raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
-                        st.success("Image uploaded successfully!")
-                    else:
-                        st.error("Failed to upload image. Please try again.")
-                except Exception as e:
-                    st.error(f"Error processing image: {e}")
 
-# ส่วนสร้าง QR Code
-if user_link:
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
-        box_size=10,
-        border=4,
+def test_qr_code_generation_empty_data():
+    engine = QRCodeEngine()
+    with pytest.raises(InvalidInputError):
+        engine.generate_qr("   ")
+
+
+# --- Unit Tests for Uploader Service (Mocked) ---
+@patch("httpx.Client.post")
+def test_imgur_upload_success(mock_post):
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "success": True,
+        "data": {"link": "https://i.imgur.com/test.png"}
+    }
+    mock_response.raise_for_status.return_value = None
+    mock_post.return_value = mock_response
+
+    service = ImgurUploaderService(client_id="dummy_id")
+    url = service.upload_image(b"fake_image_bytes")
+
+    assert url == "https://i.imgur.com/test.png"
+    mock_post.assert_called_once()
+
+
+@patch("httpx.Client.post")
+def test_imgur_upload_http_failure(mock_post):
+    mock_post.side_effect = httpx.HTTPStatusError(
+        "Forbidden",
+        request=MagicMock(),
+        response=MagicMock(status_code=403)
     )
-    qr.add_data(user_link)
-    qr.make(fit=True)
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    buf = BytesIO()
-    img.save(buf, format="PNG")
-    byte_im = buf.getvalue()
-    
-    st.image(byte_im, caption="Your QR Code is ready!", width=300)
-    
-    st.download_button(
-        label="📥 Download QR Code",
-        data=byte_im,
-        file_name="generated_qr.png",
-        mime="image/png"
-    )
+
+    service = ImgurUploaderService(client_id="dummy_id")
+    with pytest.raises(ImageUploadError, match="HTTP status 403"):
+        service.upload_image(b"fake_image_bytes")
