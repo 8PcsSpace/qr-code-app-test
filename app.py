@@ -1,6 +1,7 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Features:
+- Expanded Icon Size (+4% scaling for optimal visual proportion).
 - Precise Bottom Padding Math based on QR Data Module Boundary.
 - Custom gap_top & gap_bottom parameters to strictly align Platform Icons in Center (X & Y).
 - Official Brand Vector Path Logos (YouTube, LINE, Facebook, Instagram, TikTok).
@@ -159,47 +160,34 @@ def embed_icon_in_qr_bottom_border(
     qr_border_modules: int = 4,
     module_size: int = 20
 ) -> Image.Image:
-    """Calculates exact bottom padding using your formula:
-    
-    Data Bottom Boundary -> [Gap Top (Quiet Zone)] -> [Icon Center X & Y] -> [Gap Bottom] -> Image Edge.
-    """
+    """Calculates exact bottom padding using math formula with +4% enlarged Icon size."""
     if platform == "None":
         return qr_img
 
     qr_w, qr_h = qr_img.size
 
-    # Calculate actual Quiet Zone Border in pixels
+    # Calculate Quiet Zone Border in pixels
     quiet_zone_px = qr_border_modules * module_size
     gap_top = quiet_zone_px
     gap_bottom = quiet_zone_px
 
-    # Calculate Icon Height proportionally relative to QR canvas size
-    icon_target_h = max(36, int(qr_h * 0.08))
+    # Expanded Icon Height proportionally (Increased from 0.08 to 0.12 ~ +4% larger fill)
+    icon_target_h = max(45, int(qr_h * 0.12))
     brand_icon = create_official_brand_icon(platform, icon_target_h)
     icon_w, icon_h = brand_icon.size
 
-    # The original QR image top/left/right border = quiet_zone_px
-    # The original QR height includes: Top Quiet Zone + Data Modules + Bottom Quiet Zone (gap_top)
-    # So the Data Modules end at: (qr_h - gap_top)
     data_bottom_y = qr_h - gap_top
 
-    # Total bottom padding height from Data Modules to Image Edge:
-    # Padding = Gap Top + Icon Height + Gap Bottom
+    # Total bottom padding height
     total_bottom_padding = gap_top + icon_h + gap_bottom
-
-    # Canvas height = Data Modules height + Total Bottom Padding
     new_total_height = data_bottom_y + total_bottom_padding
 
     # Create new canvas
     final_qr_img = Image.new("RGBA", (qr_w, new_total_height), back_color)
-
-    # Paste original QR Code cropped up to Data Modules (or paste as is since quiet_zone overlaps gap_top)
     final_qr_img.paste(qr_img, (0, 0))
 
-    # Calculate EXACT Center Alignment (X & Y) for Icon inside [gap_top ... gap_bottom]
+    # Calculate Center Alignment (X & Y)
     icon_x = (qr_w - icon_w) // 2
-    
-    # Y position = data_bottom_y + gap_top + center offset between gap_top and gap_bottom
     available_slot_h = total_bottom_padding - gap_top - gap_bottom
     icon_y = data_bottom_y + gap_top + ((available_slot_h - icon_h) // 2)
 
