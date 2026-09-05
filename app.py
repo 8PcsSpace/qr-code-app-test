@@ -1,9 +1,10 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Features:
-- Expanded Icon Size (+4% scaling for optimal visual proportion).
-- Precise Bottom Padding Math based on QR Data Module Boundary.
-- Custom gap_top & gap_bottom parameters to strictly align Platform Icons in Center (X & Y).
+- Fixed Total Dimensions: 368 x 448 px (Width x Height).
+- QR Area: 368 x 368 px at the top.
+- Bottom Padding: 80 px height at the bottom.
+- Centered Platform Icon (X & Y) inside the bottom padding area.
 - Official Brand Vector Path Logos (YouTube, LINE, Facebook, Instagram, TikTok).
 """
 
@@ -34,6 +35,11 @@ ERROR_CORRECTION_MAP: Final[dict[str, int]] = {
     "Quartile (25%)": qrcode.constants.ERROR_CORRECT_Q,
     "High (30% - Best for print)": qrcode.constants.ERROR_CORRECT_H,
 }
+
+FIXED_WIDTH: Final[int] = 368
+FIXED_HEIGHT: Final[int] = 448
+QR_SIZE: Final[int] = 368  # 368x368 for top QR code
+BOTTOM_PADDING_HEIGHT: Final[int] = FIXED_HEIGHT - QR_SIZE  # 80px
 
 
 def detect_platform(url: str) -> str:
@@ -153,48 +159,33 @@ def create_official_brand_icon(platform: str, target_height: int) -> Image.Image
     return img.resize((int(w / scale), target_height), Image.Resampling.LANCZOS)
 
 
-def embed_icon_in_qr_bottom_border(
+def embed_icon_in_fixed_canvas(
     qr_img: Image.Image,
     platform: str,
     back_color: str,
-    qr_border_modules: int = 4,
-    module_size: int = 20
 ) -> Image.Image:
-    """Calculates exact bottom padding using math formula with +4% enlarged Icon size."""
-    if platform == "None":
-        return qr_img
+    """Creates a FIXED 368x448 px canvas and places QR at top (368x368) and Icon at bottom padding (80px height)."""
+    # Resize QR code precisely to 368x368
+    qr_resized = qr_img.resize((QR_SIZE, QR_SIZE), Image.Resampling.LANCZOS)
 
-    qr_w, qr_h = qr_img.size
+    # Create Fixed Canvas 368 x 448 px
+    final_canvas = Image.new("RGBA", (FIXED_WIDTH, FIXED_HEIGHT), back_color)
+    final_canvas.paste(qr_resized, (0, 0))
 
-    # Calculate Quiet Zone Border in pixels
-    quiet_zone_px = qr_border_modules * module_size
-    gap_top = quiet_zone_px
-    gap_bottom = quiet_zone_px
+    if platform != "None":
+        # Target icon height fitted proportionally in 80px bottom padding (e.g. 44px height)
+        icon_target_h = 44
+        brand_icon = create_official_brand_icon(platform, icon_target_h)
+        icon_w, icon_h = brand_icon.size
 
-    # Expanded Icon Height proportionally (Increased from 0.08 to 0.12 ~ +4% larger fill)
-    icon_target_h = max(45, int(qr_h * 0.12))
-    brand_icon = create_official_brand_icon(platform, icon_target_h)
-    icon_w, icon_h = brand_icon.size
+        # Center Alignment inside the 80px bottom area
+        icon_x = (FIXED_WIDTH - icon_w) // 2
+        icon_y = QR_SIZE + ((BOTTOM_PADDING_HEIGHT - icon_h) // 2)
 
-    data_bottom_y = qr_h - gap_top
+        # Paste icon onto bottom padding
+        final_canvas.paste(brand_icon, (icon_x, icon_y), brand_icon)
 
-    # Total bottom padding height
-    total_bottom_padding = gap_top + icon_h + gap_bottom
-    new_total_height = data_bottom_y + total_bottom_padding
-
-    # Create new canvas
-    final_qr_img = Image.new("RGBA", (qr_w, new_total_height), back_color)
-    final_qr_img.paste(qr_img, (0, 0))
-
-    # Calculate Center Alignment (X & Y)
-    icon_x = (qr_w - icon_w) // 2
-    available_slot_h = total_bottom_padding - gap_top - gap_bottom
-    icon_y = data_bottom_y + gap_top + ((available_slot_h - icon_h) // 2)
-
-    # Paste icon
-    final_qr_img.paste(brand_icon, (icon_x, icon_y), brand_icon)
-
-    return final_qr_img
+    return final_canvas
 
 
 # --- Helper Functions & Security Checks ---
@@ -234,48 +225,35 @@ def check_security_warnings(url: str) -> list[str]:
 @st.cache_data(show_spinner=False)
 def generate_raster_qr(
     data: str,
-    target_size: int = 1000,
     fill_color: str = "#000000",
     back_color: str = "#FFFFFF",
     error_correction_key: str = "High (30% - Best for print)",
     fmt: str = "PNG",
     platform_icon: str = "Auto-Detect",
 ) -> bytes:
-    """Generates Ultra-HD QR Code with Icon aligned strictly to mathematically calculated padding."""
-    border_modules = 4
-    box_size = 20
-
+    """Generates Fixed 368x448 px QR Code image."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_H),
-        box_size=box_size,
-        border=border_modules,
+        box_size=10,
+        border=4,
     )
     qr.add_data(data)
     qr.make(fit=True)
 
     qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGBA")
 
-    if target_size != qr_img.size[0]:
-        scale_ratio = target_size / qr_img.size[0]
-        box_size = int(box_size * scale_ratio)
-        qr_img = qr_img.resize((target_size, target_size), Image.Resampling.NEAREST)
-
     # Detect platform icon
     active_platform = platform_icon
     if platform_icon == "Auto-Detect":
         active_platform = detect_platform(data)
 
-    if active_platform != "None":
-        qr_img = embed_icon_in_qr_bottom_border(
-            qr_img=qr_img,
-            platform=active_platform,
-            back_color=back_color,
-            qr_border_modules=border_modules,
-            module_size=box_size
-        )
-
-    final_img = qr_img.convert("RGB")
+    # Embed QR and Icon into Fixed 368x448 Canvas
+    final_img = embed_icon_in_fixed_canvas(
+        qr_img=qr_img,
+        platform=active_platform,
+        back_color=back_color,
+    ).convert("RGB")
 
     with BytesIO() as buffer:
         save_fmt = fmt.upper()
@@ -462,14 +440,11 @@ def inject_custom_css() -> None:
 
 # --- Streamlit Application ---
 def main() -> None:
-    st.set_page_config(page_title="High-Res QR Code Generator", page_icon="🔗", layout="centered")
+    st.set_page_config(page_title="Fixed Size QR Code Generator (368x448)", page_icon="🔗", layout="centered")
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("Official Platform Icons Embedded with Mathematical Padding Alignment")
-
-    if "resolution_val" not in st.session_state:
-        st.session_state.resolution_val = 1000
+    st.caption("Fixed Dimensions: 368 x 448 px | Official Brand Logos Center Aligned")
 
     raw_url = st.text_input(
         "Enter your link here:",
@@ -508,17 +483,6 @@ def main() -> None:
 
         is_vector = "SVG" in file_format
 
-        # Resolution Slider
-        target_px = st.slider(
-            "Resolution / ความละเอียดภาพ (px):",
-            min_value=250,
-            max_value=4000,
-            key="resolution_val",
-            step=50,
-            disabled=is_vector,
-            help="สำหรับ SVG จะถูก Fix คุณภาพไว้สูงสุดอัตโนมัติ" if is_vector else "ปรับขนาดความละเอียดพิกเซลภาพได้สูงสุดถึง 4000px Ultra HD สำหรับนำไปพิมพ์งาน",
-        )
-
         try:
             st.markdown("---")
 
@@ -527,10 +491,8 @@ def main() -> None:
             if "icon_choice" not in st.session_state:
                 st.session_state.icon_choice = "Auto-Detect"
 
-            render_px = max(target_px, 1000) if not is_vector else 1000
             png_bytes_for_copy = generate_raster_qr(
                 clean_url,
-                target_size=render_px,
                 fill_color=fill_color,
                 back_color=back_color,
                 error_correction_key=st.session_state.ec_level,
@@ -538,7 +500,7 @@ def main() -> None:
                 platform_icon=st.session_state.icon_choice,
             )
 
-            caption_text = "Preview (SVG Vector)" if is_vector else f"Preview ({target_px}px Print Ready)"
+            caption_text = "Preview (SVG Vector)" if is_vector else f"Preview ({FIXED_WIDTH}x{FIXED_HEIGHT}px Fixed)"
 
             col_left, col_right = st.columns([1.2, 1], gap="medium")
 
@@ -577,7 +539,6 @@ def main() -> None:
                     }
                     download_bytes = generate_raster_qr(
                         clean_url,
-                        target_size=target_px,
                         fill_color=fill_color,
                         back_color=back_color,
                         error_correction_key=st.session_state.ec_level,
@@ -587,7 +548,7 @@ def main() -> None:
                     st.download_button(
                         label=f"📥 Download {file_format}",
                         data=download_bytes,
-                        file_name=f"qr_code_{target_px}px.{file_format.lower()}",
+                        file_name=f"qr_code_{FIXED_WIDTH}x{FIXED_HEIGHT}.{file_format.lower()}",
                         mime=mime_map.get(file_format, "image/png"),
                         type="primary",
                         use_container_width=True,
@@ -620,7 +581,7 @@ def main() -> None:
                     "Brand Icon (โลโก้ขอบล่าง):",
                     options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None (ปิดโลโก้)"],
                     key="icon_choice",
-                    help="จัดวางโลโก้ตามสูตรระยะ Gap บน + Icon Height + Gap ล่าง กึ่งกลาง Center X & Y",
+                    help="จัดวางโลโก้ในพื้นที่ Padding ด้านล่าง 80px กึ่งกลาง Center X & Y",
                 )
 
         except Exception as err:
