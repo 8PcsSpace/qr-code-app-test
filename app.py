@@ -466,7 +466,7 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("Official Platform Icons Embedded with Mathematical Padding Alignment")
+    st.caption("Official Platform test.")
 
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
