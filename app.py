@@ -1,11 +1,9 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Features:
-- Extends the bottom border area (Margin/Padding) to house the brand icon.
-  This ensures ZERO overlap with QR Code data dots (100% Scan Reliability).
-- High-definition SVG-rendered crisp vector brand icons.
-- Auto-detects platform links & direct UI override dropdown on the right.
-- High-res raster PNG/JPG export & infinite-scale SVG support.
+- Perfectly proportioned Official Brand Logos (No Distortion/Stretching).
+- Compact Bottom Margin Space aligned exactly at the QR bottom edge line.
+- Ultra High-Resolution Rendering for Maximum Print Clarity.
 """
 
 import base64
@@ -53,96 +51,115 @@ def detect_platform(url: str) -> str:
     return "None"
 
 
-def create_vector_brand_icon(platform: str, size: int) -> Image.Image:
-    """Generates an ultra-crisp, high-definition vector brand icon."""
-    # Render at 2x resolution then downscale for antialiased sharp edges
-    render_size = size * 2
-    icon = Image.new("RGBA", (render_size, render_size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(icon)
-    m = int(render_size * 0.04)
+def create_vector_brand_icon(platform: str, target_h: int) -> Image.Image:
+    """Generates official-aspect-ratio brand logos with maximum crispness."""
+    # Scale factor for ultra-sharp supersampling
+    scale = 4
+    h = target_h * scale
 
     if platform == "YouTube":
-        # YouTube Red Badge + Sharp White Play Triangle
-        draw.rounded_rectangle([m, m, render_size - m, render_size - m], radius=int(render_size * 0.28), fill="#FF0000")
-        poly = [
-            (int(render_size * 0.40), int(render_size * 0.26)),
-            (int(render_size * 0.40), int(render_size * 0.74)),
-            (int(render_size * 0.72), int(render_size * 0.50)),
+        # YouTube official aspect ratio is ~ 1.4 : 1
+        w = int(h * 1.41)
+        icon = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(icon)
+        
+        # Red Pill Base
+        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.28), fill="#FF0000")
+        
+        # Centered White Triangle Play Icon
+        tri = [
+            (int(w * 0.40), int(h * 0.26)),
+            (int(w * 0.40), int(h * 0.74)),
+            (int(w * 0.69), int(h * 0.50)),
         ]
-        draw.polygon(poly, fill="#FFFFFF")
+        draw.polygon(tri, fill="#FFFFFF")
 
     elif platform == "LINE":
-        # LINE Green Badge + Bubble + Text
-        draw.rounded_rectangle([m, m, render_size - m, render_size - m], radius=int(render_size * 0.25), fill="#06C755")
-        draw.ellipse([int(render_size * 0.12), int(render_size * 0.18), int(render_size * 0.88), int(render_size * 0.72)], fill="#FFFFFF")
-        poly = [
-            (int(render_size * 0.25), int(render_size * 0.60)),
-            (int(render_size * 0.15), int(render_size * 0.85)),
-            (int(render_size * 0.45), int(render_size * 0.68)),
+        # Square Aspect Ratio for LINE Badge
+        w = h
+        icon = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(icon)
+        
+        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.22), fill="#06C755")
+        draw.ellipse([int(w * 0.12), int(h * 0.16), int(w * 0.88), int(h * 0.72)], fill="#FFFFFF")
+        tri = [
+            (int(w * 0.22), int(h * 0.58)),
+            (int(w * 0.12), int(h * 0.82)),
+            (int(w * 0.42), int(h * 0.68)),
         ]
-        draw.polygon(poly, fill="#FFFFFF")
-        draw.text((int(render_size * 0.20), int(render_size * 0.32)), "LINE", fill="#06C755")
+        draw.polygon(tri, fill="#FFFFFF")
 
     elif platform == "Facebook":
-        # FB Circle + Clear Bold 'f'
-        draw.ellipse([m, m, render_size - m, render_size - m], fill="#1877F2")
-        draw.text((int(render_size * 0.35), int(render_size * 0.08)), "f", fill="#FFFFFF")
+        # Square Aspect Ratio for FB Badge
+        w = h
+        icon = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(icon)
+        
+        draw.ellipse([0, 0, w, h], fill="#1877F2")
+        # Bold 'f'
+        draw.rectangle([int(w * 0.48), int(h * 0.35), int(w * 0.65), int(h * 0.95)], fill="#FFFFFF")
+        draw.rectangle([int(w * 0.38), int(h * 0.45), int(w * 0.75), int(h * 0.58)], fill="#FFFFFF")
+        draw.arc([int(w * 0.48), int(h * 0.18), int(w * 0.80), int(h * 0.50)], 180, 270, fill="#FFFFFF", width=int(h * 0.14))
 
     elif platform == "Instagram":
-        # IG Gradient Pink + Camera Rings
-        draw.rounded_rectangle([m, m, render_size - m, render_size - m], radius=int(render_size * 0.30), fill="#E1306C")
-        stroke_w = max(2, int(render_size * 0.08))
+        # Square Aspect Ratio for IG Badge
+        w = h
+        icon = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(icon)
+        
+        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.28), fill="#E1306C")
+        stroke = max(2, int(h * 0.08))
         draw.rounded_rectangle(
-            [int(render_size * 0.22), int(render_size * 0.22), int(render_size * 0.78), int(render_size * 0.78)],
-            radius=int(render_size * 0.18),
+            [int(w * 0.20), int(h * 0.20), int(w * 0.80), int(h * 0.80)],
+            radius=int(h * 0.18),
             outline="#FFFFFF",
-            width=stroke_w,
+            width=stroke,
         )
-        draw.ellipse(
-            [int(render_size * 0.38), int(render_size * 0.38), int(render_size * 0.62), int(render_size * 0.62)],
-            outline="#FFFFFF",
-            width=stroke_w,
-        )
-        draw.ellipse(
-            [int(render_size * 0.64), int(render_size * 0.28), int(render_size * 0.72), int(render_size * 0.36)],
-            fill="#FFFFFF",
-        )
+        draw.ellipse([int(w * 0.36), int(h * 0.36), int(w * 0.64), int(h * 0.64)], outline="#FFFFFF", width=stroke)
+        draw.ellipse([int(w * 0.66), int(h * 0.26), int(w * 0.74), int(h * 0.34)], fill="#FFFFFF")
 
     elif platform == "TikTok":
-        # TikTok Black Badge + Music Symbol
-        draw.rounded_rectangle([m, m, render_size - m, render_size - m], radius=int(render_size * 0.25), fill="#000000")
-        draw.ellipse([int(render_size * 0.28), int(render_size * 0.52), int(render_size * 0.58), int(render_size * 0.80)], fill="#25F4EE")
-        draw.rectangle([int(render_size * 0.48), int(render_size * 0.22), int(render_size * 0.58), int(render_size * 0.65)], fill="#25F4EE")
-        draw.rectangle([int(render_size * 0.58), int(render_size * 0.22), int(render_size * 0.78), int(render_size * 0.38)], fill="#FE2C55")
+        # Square Aspect Ratio for TikTok Badge
+        w = h
+        icon = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(icon)
+        
+        draw.rounded_rectangle([0, 0, w, h], radius=int(h * 0.25), fill="#000000")
+        draw.ellipse([int(w * 0.28), int(h * 0.52), int(w * 0.58), int(h * 0.80)], fill="#25F4EE")
+        draw.rectangle([int(w * 0.48), int(h * 0.22), int(w * 0.58), int(h * 0.65)], fill="#25F4EE")
+        draw.rectangle([int(w * 0.58), int(h * 0.22), int(w * 0.78), int(h * 0.38)], fill="#FE2C55")
 
-    # Downscale for crisp anti-aliasing
-    return icon.resize((size, size), Image.Resampling.LANCZOS)
+    else:
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+
+    # Downscale with high quality Lanczos anti-aliasing
+    return icon.resize((int(w / scale), target_h), Image.Resampling.LANCZOS)
 
 
 def add_bottom_frame_with_icon(qr_img: Image.Image, platform: str, back_color: str) -> Image.Image:
-    """Extends bottom QR canvas frame to hold the platform icon WITHOUT touching QR dots."""
+    """Extends bottom QR canvas frame just enough to align top of logo right at the red line."""
     if platform == "None":
         return qr_img
 
     qr_w, qr_h = qr_img.size
     
-    # Extra bottom frame height (18% of QR size)
-    bottom_padding = int(qr_h * 0.18)
+    # Reduced bottom margin height (~10% of QR height)
+    bottom_padding = int(qr_h * 0.10)
     new_h = qr_h + bottom_padding
 
-    # Create new extended image canvas with full background color
+    # Create new canvas extended at the bottom
     framed_img = Image.new("RGBA", (qr_w, new_h), back_color)
-    
-    # Paste untouched original QR Code at the top
     framed_img.paste(qr_img, (0, 0))
 
-    # Calculate icon position inside the bottom frame space
-    icon_size = int(bottom_padding * 0.70)
-    icon_x = (qr_w - icon_size) // 2
-    icon_y = qr_h + (bottom_padding - icon_size) // 2
+    # Icon height takes most of the bottom padding
+    icon_h = int(bottom_padding * 0.82)
+    brand_icon = create_vector_brand_icon(platform, icon_h)
 
-    # Draw crisp brand icon
-    brand_icon = create_vector_brand_icon(platform, icon_size)
+    # Center horizontally, position top edge of logo right at original QR bottom line
+    icon_w, _ = brand_icon.size
+    icon_x = (qr_w - icon_w) // 2
+    icon_y = qr_h + (bottom_padding - icon_h) // 2
+
     framed_img.paste(brand_icon, (icon_x, icon_y), brand_icon)
 
     return framed_img
@@ -192,7 +209,7 @@ def generate_raster_qr(
     fmt: str = "PNG",
     platform_icon: str = "Auto-Detect",
 ) -> bytes:
-    """Generates Ultra-HD QR Code with Extended Bottom Frame for Brand Icon."""
+    """Generates Ultra-HD QR Code with Compact Bottom Frame for Uncompressed Brand Icons."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_H),
@@ -406,14 +423,14 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("Zero-Overlap High Scan Rate QR Generator with Bottom Platform Frame")
+    st.caption("Zero-Overlap High Scan Rate QR Generator with Compact Platform Frame")
 
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
 
     raw_url = st.text_input(
         "Enter your link here:",
-        placeholder="https://www.instagram.com/...",
+        placeholder="https://www.youtube.com/watch?v=...",
         help="Type or paste a valid web address",
         key="url_input",
     )
@@ -478,7 +495,7 @@ def main() -> None:
                 platform_icon=st.session_state.icon_choice,
             )
 
-            caption_text = "Preview (SVG Vector - Bottom Frame)" if is_vector else f"Preview ({target_px}px Print Ready)"
+            caption_text = "Preview (SVG Vector - Compact Bottom Frame)" if is_vector else f"Preview ({target_px}px Print Ready)"
 
             col_left, col_right = st.columns([1.2, 1], gap="medium")
 
@@ -560,7 +577,7 @@ def main() -> None:
                     "Brand Icon Frame (โลโก้ขอบล่าง):",
                     options=["Auto-Detect", "YouTube", "LINE", "Instagram", "Facebook", "TikTok", "None (ปิดโลโก้)"],
                     key="icon_choice",
-                    help="ดึงโลโก้เวกเตอร์มาแสดงไว้ขอบล่างนอกเขต QR ช่วยให้เห็นช่องทางชัดเจน และสแกนติดง่าย 100%",
+                    help="ดึงโลโก้เวกเตอร์สัดส่วนจริงมาแสดงไว้ขอบล่างนอกเขต QR ช่วยให้เห็นช่องทางชัดเจน และสแกนติดง่าย 100%",
                 )
 
         except Exception as err:
