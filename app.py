@@ -1,12 +1,11 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- High-Clarity Image Preview rendering (Optimized for HiDPI/Retina screens).
-- Perfectly centered Download and Copy buttons.
-- Persistent Resolution Slider State (No unwanted auto-reset).
-- Support for PNG, JPG (100% Quality), WEBP, and Vector SVG formats.
-- High-precision resolution slider up to 4000px Ultra HD.
-- Full security checks and HTML/JS Clipboard copying component.
+- Pixel-perfect crisp QR rendering (No blurring at any resolution).
+- Strictly centered action buttons (Download & Copy to Clipboard).
+- Format selector with support for PNG, JPG, WEBP, and Vector SVG.
+- Persistent Resolution Slider up to 4000px Ultra HD.
+- Full security checks for URLs.
 """
 
 from io import BytesIO
@@ -76,17 +75,17 @@ def check_security_warnings(url: str) -> list[str]:
 @st.cache_data(show_spinner=False)
 def generate_raster_qr(
     data: str,
-    target_size: int = 800,
+    target_size: int = 1000,
     fill_color: str = "#000000",
     back_color: str = "#FFFFFF",
     error_correction_key: str = "Medium (15%)",
     fmt: str = "PNG",
 ) -> bytes:
-    """Generates high-definition Raster QR Codes (PNG, JPG, WEBP)."""
+    """Generates ultra-crisp Raster QR Codes (PNG, JPG, WEBP)."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
-        box_size=10,
+        box_size=20,
         border=4,
     )
     qr.add_data(data)
@@ -94,8 +93,9 @@ def generate_raster_qr(
 
     qr_img = qr.make_image(fill_color=fill_color, back_color=back_color).convert("RGB")
 
+    # Resize cleanly using NEAREST neighbor to preserve sharp pixel edges
     if target_size != qr_img.size[0]:
-        qr_img = qr_img.resize((target_size, target_size), Image.Resampling.LANCZOS)
+        qr_img = qr_img.resize((target_size, target_size), Image.Resampling.NEAREST)
 
     with BytesIO() as buffer:
         save_fmt = fmt.upper()
@@ -119,7 +119,7 @@ def generate_svg_qr(
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
-        box_size=10,
+        box_size=20,
         border=4,
         image_factory=factory,
     )
@@ -133,12 +133,12 @@ def generate_svg_qr(
 
 
 def render_copy_button(text_to_copy: str) -> None:
-    """Renders a JavaScript-powered Copy to Clipboard button component."""
+    """Renders a centered JavaScript-powered Copy to Clipboard button component."""
     html_code = f"""
-    <div style="display: flex; justify-content: center; width: 100%;">
+    <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%;">
         <button id="copyBtn" onclick="copyToClipboard()" style="
             width: 100%;
-            max-width: 320px;
+            max-width: 380px;
             background-color: #4CAF50;
             color: white;
             padding: 10px 16px;
@@ -149,6 +149,7 @@ def render_copy_button(text_to_copy: str) -> None:
             font-weight: bold;
             box-shadow: 0px 2px 5px rgba(0,0,0,0.2);
             transition: all 0.2s ease-in-out;
+            margin: 0 auto;
         ">📋 Copy URL to Clipboard</button>
     </div>
 
@@ -170,28 +171,38 @@ def render_copy_button(text_to_copy: str) -> None:
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to align download buttons and styling."""
+    """Injects custom CSS to strictly center buttons and keep QR image pixel-sharp."""
     st.markdown(
         """
         <style>
-        .stDownloadButton {
-            display: flex;
-            justify-content: center;
-            width: 100%;
-        }
-        .stDownloadButton > button {
+        /* Force Download Button Centering */
+        div.stDownloadButton {
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
             width: 100% !important;
-            max-width: 320px !important;
+        }
+        div.stDownloadButton > button {
+            width: 100% !important;
+            max-width: 380px !important;
             padding: 10px 16px !important;
             font-size: 15px !important;
             font-weight: bold !important;
             border-radius: 6px !important;
+            margin: 0 auto !important;
+        }
+
+        /* Ensure QR Code image has pixel-perfect sharpness without anti-aliasing blur */
+        div[data-testid="stImage"] {
+            display: flex;
+            justify-content: center;
         }
         div[data-testid="stImage"] > img {
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
+            image-rendering: pixelated !important;
+            image-rendering: -moz-crisp-edges !important;
+            image-rendering: crisp-edges !important;
             border-radius: 8px;
-            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
+            box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.2);
         }
         </style>
         """,
@@ -207,7 +218,7 @@ def main() -> None:
     st.title("URL to QR Code Generator 🔗")
     st.caption("High-Resolution Vector & Raster Image Support with Full Security Checks")
 
-    # Initialize resolution session state to prevent unwanted auto-resets
+    # Initialize default resolution to 1000px
     if "resolution_val" not in st.session_state:
         st.session_state.resolution_val = 1000
 
@@ -246,7 +257,7 @@ def main() -> None:
             )
 
         # 1. Centered Format Selector
-        _, center_fmt_col, _ = st.columns([1, 2, 1])
+        _, center_fmt_col, _ = st.columns([0.2, 2.6, 0.2])
         with center_fmt_col:
             file_format = st.radio(
                 "Export File Format (ชนิดไฟล์):",
@@ -256,7 +267,7 @@ def main() -> None:
 
         is_vector = "SVG" in file_format
 
-        # 2. Persistent Resolution Slider (State-Bound)
+        # 2. Resolution Slider
         target_px = st.slider(
             "Resolution / ความละเอียดภาพ (px):",
             min_value=250,
@@ -268,12 +279,12 @@ def main() -> None:
         )
 
         try:
-            # Generate High-Clarity Preview Stream (At least 800px for sharp display)
-            preview_px = max(800, target_px) if not is_vector else 800
-            
+            # Render high-crisp preview image
+            render_px = max(target_px, 1000) if not is_vector else 1000
+
             display_bytes = generate_raster_qr(
                 clean_url,
-                target_size=preview_px,
+                target_size=render_px,
                 fill_color=fill_color,
                 back_color=back_color,
                 error_correction_key=error_correction,
@@ -284,8 +295,8 @@ def main() -> None:
 
             st.markdown("---")
 
-            # Center alignment layout for Preview & Buttons
-            _, center_col, _ = st.columns([1, 2.2, 1])
+            # Center Layout Container
+            _, center_col, _ = st.columns([0.5, 2, 0.5])
 
             with center_col:
                 st.image(
@@ -317,7 +328,6 @@ def main() -> None:
                         "JPG": "image/jpeg",
                         "WEBP": "image/webp",
                     }
-                    # Actual file for download generated at target_px
                     download_bytes = generate_raster_qr(
                         clean_url,
                         target_size=target_px,
