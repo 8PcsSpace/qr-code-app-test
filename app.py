@@ -23,15 +23,15 @@ elif option == "Upload Image":
         if st.button("Generate QR from Image"):
             with st.spinner("Processing & Uploading image..."):
                 try:
-                    # 1. ย่อขนาดรูปภาพเพื่อลดขนาดไฟล์
+                    # ย่อขนาดรูปภาพก่อนส่งเพื่อป้องกันไฟล์ใหญ่เกินไป
                     img_pil = Image.open(uploaded_file)
-                    img_pil.thumbnail((1024, 1024))  # ย่อไม่ให้เกิน 1024px
+                    img_pil.thumbnail((1024, 1024))
                     
                     img_byte_arr = BytesIO()
                     img_pil.save(img_byte_arr, format='JPEG', quality=85)
                     img_bytes = img_byte_arr.getvalue()
 
-                    # 2. อัปโหลดไปยัง Catbox.moe
+                    # ส่งไฟล์ไปยัง Catbox.moe
                     files = {
                         'reqtype': (None, 'fileupload'),
                         'fileToUpload': ('image.jpg', img_bytes, 'image/jpeg')
@@ -42,11 +42,10 @@ elif option == "Upload Image":
                         user_link = response.text.strip()
                         st.success("Image uploaded successfully!")
                     else:
-                        st.error("Failed to upload image. Please try again.")
+                        st.error(f"Failed to upload image. Server response: {response.text}")
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.error(f"Error processing image: {e}")
 
-# ส่วนสร้าง QR Code
 if user_link:
     qr = qrcode.QRCode(
         version=1,
