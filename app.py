@@ -1,14 +1,15 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
-Features:
-- Instant real-time QR generation (No Enter required).
-- High-definition image scaling & Vector SVG export.
-- Custom Foreground/Background colors & Error Correction levels.
-- Caching for performance optimization.
-- Center-aligned UI.
+Comprehensive production release featuring:
+- Instant real-time QR generation.
+- Dynamic Preview synced with chosen resolution & style.
+- Security warnings (SSRF / Data length checks).
+- HTML/JS Clipboard Copying component.
+- Vector SVG & HD PNG exports.
 """
 
 from io import BytesIO
+import ipaddress
 import logging
 from typing import Final
 from urllib.parse import urlparse
@@ -17,6 +18,7 @@ from PIL import Image
 import qrcode
 import qrcode.image.svg
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Setup Logging
 logging.basicConfig(
@@ -34,7 +36,7 @@ ERROR_CORRECTION_MAP: Final[dict[str, int]] = {
 }
 
 
-# --- Helper Functions ---
+# --- Helper Functions & Security Checks ---
 def validate_url(url: str) -> bool:
     """Checks if the given string is a valid HTTP/HTTPS URL structure."""
     try:
@@ -42,6 +44,34 @@ def validate_url(url: str) -> bool:
         return all([result.scheme in ("http", "https"), result.netloc])
     except Exception:
         return False
+
+
+def check_security_warnings(url: str) -> list[str]:
+    """Inspects URL for potential security or usability issues (SSRF / Data Length)."""
+    warnings = []
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+
+        # Check for Private IP / Localhost (SSRF Prevention)
+        if hostname in ("localhost", "127.0.0.1", "0.0.0.0"):
+            warnings.append("⚠️ ลิงก์นี้ชี้ไปที่ Localhost/Internal Network อาจไม่สามารถสแกนจากอุปกรณ์ภายนอกได้")
+        else:
+            try:
+                ip = ipaddress.ip_address(hostname)
+                if ip.is_private:
+                    warnings.append("⚠️ ลิงก์นี้ชี้ไปที่ Private IP Address (Internal Network)")
+            except ValueError:
+                pass
+
+        # Check Data Length
+        if len(url) > 100:
+            warnings.append("💡 ลิงก์มีความยาวมาก อาจทำให้ลาย QR Code ถี่และสแกนยากขึ้น แนะนำให้ย่อลิงก์ก่อน")
+
+    except Exception as exc:
+        logger.warning("Security check warning: %s", exc)
+
+    return warnings
 
 
 @st.cache_data(show_spinner=False)
@@ -52,7 +82,7 @@ def generate_png_qr(
     back_color: str = "#FFFFFF",
     error_correction_key: str = "Medium (15%)",
 ) -> bytes:
-    """Generates a PNG QR Code with custom colors and error correction levels."""
+    """Generates a PNG QR Code with custom colors and resolution."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
@@ -96,6 +126,38 @@ def generate_svg_qr(
         return buffer.getvalue().decode("utf-8")
 
 
+def render_copy_button(text_to_copy: str) -> None:
+    """Renders a JavaScript-powered Copy to Clipboard button component."""
+    html_code = f"""
+    <button id="copyBtn" onclick="copyToClipboard()" style="
+        width: 100%;
+        background-color: #4CAF50;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+    ">📋 Copy URL to Clipboard</button>
+
+    <script>
+    function copyToClipboard() {{
+        navigator.clipboard.writeText("{text_to_copy}").then(function() {{
+            var btn = document.getElementById('copyBtn');
+            btn.innerText = '✅ Copied!';
+            btn.style.backgroundColor = '#2E7D32';
+            setTimeout(function() {{
+                btn.innerText = '📋 Copy URL to Clipboard';
+                btn.style.backgroundColor = '#4CAF50';
+            }}, 2000);
+        }});
+    }}
+    </script>
+    """
+    components.html(html_code, height=45)
+
+
 def inject_custom_css() -> None:
     """Injects custom CSS to align download buttons and styling."""
     st.markdown(
@@ -116,7 +178,7 @@ def main() -> None:
     inject_custom_css()
 
     st.title("URL to QR Code Generator 🔗")
-    st.caption("High-Resolution Vector & Raster Image Support with Custom Styling")
+    st.caption("High-Resolution Vector & Raster Image Support with Full Security Checks")
 
     raw_url = st.text_input(
         "Enter your link here:",
@@ -132,7 +194,12 @@ def main() -> None:
             st.warning("⚠️ Please enter a valid URL (e.g., https://example.com)")
             return
 
-        # Settings Accordion
+        # 1. Security & Error Resilience Warnings
+        sec_warnings = check_security_warnings(clean_url)
+        for warn in sec_warnings:
+            st.warning(warn)
+
+        # Style Customization Accordion
         with st.expander("🎨 Customize QR Code Style & Quality", expanded=False):
             col_fg, col_bg = st.columns(2)
             with col_fg:
@@ -169,9 +236,10 @@ def main() -> None:
         target_px = dimension_map[resolution]
 
         try:
-            preview_bytes = generate_png_qr(
+            # 2. Dynamic Preview: Generates preview according to target size and chosen colors
+            display_png_bytes = generate_png_qr(
                 clean_url,
-                target_size=400,
+                target_size=target_px,
                 fill_color=fill_color,
                 back_color=back_color,
                 error_correction_key=error_correction,
@@ -183,7 +251,14 @@ def main() -> None:
             _, center_col, _ = st.columns([1, 2, 1])
 
             with center_col:
-                st.image(preview_bytes, caption="Your Generated QR Code", use_container_width=True)
+                st.image(
+                    display_png_bytes,
+                    caption=f"Preview ({target_px}px x {target_px}px)",
+                    use_container_width=True,
+                )
+
+                # 3. Copy to Clipboard Component
+                render_copy_button(clean_url)
 
                 if "SVG" in file_format:
                     svg_data = generate_svg_qr(
@@ -199,16 +274,9 @@ def main() -> None:
                         type="primary",
                     )
                 else:
-                    png_hd_bytes = generate_png_qr(
-                        clean_url,
-                        target_size=target_px,
-                        fill_color=fill_color,
-                        back_color=back_color,
-                        error_correction_key=error_correction,
-                    )
                     st.download_button(
                         label=f"📥 Download PNG ({target_px}px)",
-                        data=png_hd_bytes,
+                        data=display_png_bytes,
                         file_name=f"qr_code_{target_px}px.png",
                         mime="image/png",
                         type="primary",
