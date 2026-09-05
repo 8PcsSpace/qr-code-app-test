@@ -1,11 +1,10 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Instant real-time QR generation.
-- Dynamic Preview synced with chosen resolution & style.
-- Security warnings (SSRF / Data length checks).
-- HTML/JS Clipboard Copying component.
-- Vector SVG & HD PNG exports.
+- Centered Format Selector & Conditional Resolution Slider.
+- Support for PNG, JPG (100% Quality), WEBP, and Vector SVG formats.
+- High-precision resolution slider up to 4000px Ultra HD.
+- Full security checks and HTML/JS Clipboard copying component.
 """
 
 from io import BytesIO
@@ -53,7 +52,6 @@ def check_security_warnings(url: str) -> list[str]:
         parsed = urlparse(url)
         hostname = parsed.hostname or ""
 
-        # Check for Private IP / Localhost (SSRF Prevention)
         if hostname in ("localhost", "127.0.0.1", "0.0.0.0"):
             warnings.append("⚠️ ลิงก์นี้ชี้ไปที่ Localhost/Internal Network อาจไม่สามารถสแกนจากอุปกรณ์ภายนอกได้")
         else:
@@ -64,7 +62,6 @@ def check_security_warnings(url: str) -> list[str]:
             except ValueError:
                 pass
 
-        # Check Data Length
         if len(url) > 100:
             warnings.append("💡 ลิงก์มีความยาวมาก อาจทำให้ลาย QR Code ถี่และสแกนยากขึ้น แนะนำให้ย่อลิงก์ก่อน")
 
@@ -75,14 +72,15 @@ def check_security_warnings(url: str) -> list[str]:
 
 
 @st.cache_data(show_spinner=False)
-def generate_png_qr(
+def generate_raster_qr(
     data: str,
     target_size: int = 500,
     fill_color: str = "#000000",
     back_color: str = "#FFFFFF",
     error_correction_key: str = "Medium (15%)",
+    fmt: str = "PNG",
 ) -> bytes:
-    """Generates a PNG QR Code with custom colors and resolution."""
+    """Generates high-definition Raster QR Codes (PNG, JPG, WEBP)."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=ERROR_CORRECTION_MAP.get(error_correction_key, qrcode.constants.ERROR_CORRECT_M),
@@ -98,7 +96,13 @@ def generate_png_qr(
         qr_img = qr_img.resize((target_size, target_size), Image.Resampling.LANCZOS)
 
     with BytesIO() as buffer:
-        qr_img.save(buffer, format="PNG")
+        save_fmt = fmt.upper()
+        if save_fmt == "JPG":
+            save_fmt = "JPEG"
+            qr_img.save(buffer, format=save_fmt, quality=100, subsampling=0)
+        else:
+            qr_img.save(buffer, format=save_fmt, quality=100)
+            
         return buffer.getvalue()
 
 
@@ -194,7 +198,7 @@ def main() -> None:
             st.warning("⚠️ Please enter a valid URL (e.g., https://example.com)")
             return
 
-        # 1. Security & Error Resilience Warnings
+        # Security & Error Resilience Warnings
         sec_warnings = check_security_warnings(clean_url)
         for warn in sec_warnings:
             st.warning(warn)
@@ -214,36 +218,50 @@ def main() -> None:
                 help="ระดับสูงขึ้นจะช่วยให้สแกนได้แม้อยู่บนพื้นผิวที่ไม่เรียบหรือชำรุด",
             )
 
-        col_res, col_fmt = st.columns(2)
-        with col_res:
-            resolution = st.select_slider(
-                "PNG Resolution (ความคมชัด):",
-                options=["Standard (500px)", "High HD (1000px)", "Ultra 4K (2000px)"],
-                value="High HD (1000px)",
-            )
-        with col_fmt:
+        # 1. Centered Format Selector
+        _, center_fmt_col, _ = st.columns([1, 2, 1])
+        with center_fmt_col:
             file_format = st.radio(
-                "Export File Format:",
-                options=["PNG (Raster)", "SVG (Vector - ไม่แตก)"],
+                "Export File Format (ชนิดไฟล์):",
+                options=["PNG", "JPG", "WEBP", "SVG (Vector)"],
                 horizontal=True,
             )
 
-        dimension_map = {
-            "Standard (500px)": 500,
-            "High HD (1000px)": 1000,
-            "Ultra 4K (2000px)": 2000,
-        }
-        target_px = dimension_map[resolution]
+        is_vector = "SVG" in file_format
+
+        # 2. Resolution Slider Placed Below Format Selector
+        target_px = st.slider(
+            "Resolution / ความละเอียดภาพ (px):",
+            min_value=250,
+            max_value=4000,
+            value=1000,
+            step=50,
+            disabled=is_vector,
+            help="สำหรับ SVG จะถูก Fix คุณภาพไว้สูงสุดอัตโนมัติ ไม่จำเป็นต้องปรับขนาดพิกเซล" if is_vector else "ปรับขนาดความละเอียดพิกเซลภาพได้สูงสุดถึง 4000px Ultra HD",
+        )
 
         try:
-            # 2. Dynamic Preview: Generates preview according to target size and chosen colors
-            display_png_bytes = generate_png_qr(
-                clean_url,
-                target_size=target_px,
-                fill_color=fill_color,
-                back_color=back_color,
-                error_correction_key=error_correction,
-            )
+            # Generate preview stream
+            if is_vector:
+                display_bytes = generate_raster_qr(
+                    clean_url,
+                    target_size=500,
+                    fill_color=fill_color,
+                    back_color=back_color,
+                    error_correction_key=error_correction,
+                    fmt="PNG",
+                )
+                caption_text = "Preview (SVG Vector - Infinite Resolution)"
+            else:
+                display_bytes = generate_raster_qr(
+                    clean_url,
+                    target_size=target_px,
+                    fill_color=fill_color,
+                    back_color=back_color,
+                    error_correction_key=error_correction,
+                    fmt=file_format,
+                )
+                caption_text = f"Preview ({target_px}px x {target_px}px)"
 
             st.markdown("---")
 
@@ -252,15 +270,16 @@ def main() -> None:
 
             with center_col:
                 st.image(
-                    display_png_bytes,
-                    caption=f"Preview ({target_px}px x {target_px}px)",
+                    display_bytes,
+                    caption=caption_text,
                     use_container_width=True,
                 )
 
-                # 3. Copy to Clipboard Component
+                # Copy to Clipboard Component
                 render_copy_button(clean_url)
 
-                if "SVG" in file_format:
+                # Download Buttons according to selected format
+                if is_vector:
                     svg_data = generate_svg_qr(
                         clean_url,
                         fill_color=fill_color,
@@ -274,11 +293,16 @@ def main() -> None:
                         type="primary",
                     )
                 else:
+                    mime_map = {
+                        "PNG": "image/png",
+                        "JPG": "image/jpeg",
+                        "WEBP": "image/webp",
+                    }
                     st.download_button(
-                        label=f"📥 Download PNG ({target_px}px)",
-                        data=display_png_bytes,
-                        file_name=f"qr_code_{target_px}px.png",
-                        mime="image/png",
+                        label=f"📥 Download {file_format} ({target_px}px)",
+                        data=display_bytes,
+                        file_name=f"qr_code_{target_px}px.{file_format.lower()}",
+                        mime=mime_map.get(file_format, "image/png"),
                         type="primary",
                     )
 
