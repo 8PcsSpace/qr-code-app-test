@@ -1,13 +1,14 @@
 """Single-file Streamlit QR Code Generator Application (app.py).
 
 Comprehensive production release featuring:
-- Beautiful action bar with 3 synchronized buttons:
+- Side-by-side Layout: QR Preview on the Left, Action Panel on the Right.
+- Stacked Action Buttons (Top to Bottom):
   1. Download File (PNG/JPG/WEBP/SVG)
-  2. Copy Image directly to Clipboard (ClipboardItem API)
+  2. Copy Image directly to Clipboard
   3. Copy Text URL to Clipboard
-- Pixel-perfect crisp QR rendering with HiDPI support.
+- High-definition crisp QR rendering.
 - Persistent Resolution Slider up to 4000px Ultra HD.
-- Security and validation checks for URLs.
+- Full security checks for URLs.
 """
 
 import base64
@@ -143,13 +144,13 @@ def render_copy_image_button(img_bytes: bytes) -> None:
         body {{ margin: 0; padding: 0; background: transparent; }}
         .btn {{
             width: 100%;
-            height: 42px;
+            height: 45px;
             background-color: #2196F3;
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             box-shadow: 0px 2px 4px rgba(0,0,0,0.15);
@@ -157,7 +158,7 @@ def render_copy_image_button(img_bytes: bytes) -> None:
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 8px;
         }}
         .btn:hover {{ background-color: #1976D2; }}
     </style>
@@ -176,7 +177,7 @@ def render_copy_image_button(img_bytes: bytes) -> None:
                 new ClipboardItem({{ 'image/png': blob }})
             ]);
 
-            btn.innerText = '✅ Copied!';
+            btn.innerText = '✅ Image Copied!';
             btn.style.backgroundColor = '#2E7D32';
             setTimeout(() => {{
                 btn.innerText = '🖼️ Copy Image';
@@ -194,7 +195,7 @@ def render_copy_image_button(img_bytes: bytes) -> None:
     }}
     </script>
     """
-    components.html(html_code, height=45)
+    components.html(html_code, height=50)
 
 
 def render_copy_url_button(text_to_copy: str) -> None:
@@ -204,13 +205,13 @@ def render_copy_url_button(text_to_copy: str) -> None:
         body {{ margin: 0; padding: 0; background: transparent; }}
         .btn {{
             width: 100%;
-            height: 42px;
+            height: 45px;
             background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             box-shadow: 0px 2px 4px rgba(0,0,0,0.15);
@@ -218,7 +219,7 @@ def render_copy_url_button(text_to_copy: str) -> None:
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 8px;
         }}
         .btn:hover {{ background-color: #388E3C; }}
     </style>
@@ -229,7 +230,7 @@ def render_copy_url_button(text_to_copy: str) -> None:
     function copyUrlToClipboard() {{
         const btn = document.getElementById('copyUrlBtn');
         navigator.clipboard.writeText("{text_to_copy}").then(() => {{
-            btn.innerText = '✅ Copied!';
+            btn.innerText = '✅ URL Copied!';
             btn.style.backgroundColor = '#2E7D32';
             setTimeout(() => {{
                 btn.innerText = '🔗 Copy URL';
@@ -246,29 +247,28 @@ def render_copy_url_button(text_to_copy: str) -> None:
     }}
     </script>
     """
-    components.html(html_code, height=45)
+    components.html(html_code, height=50)
 
 
 def inject_custom_css() -> None:
-    """Injects custom CSS to equalize heights and clean up layout."""
+    """Injects custom CSS to equalize button heights and clean up right side panel."""
     st.markdown(
         """
         <style>
-        /* Uniform Download Button Styling */
+        /* Download Button full width styling */
+        div.stDownloadButton {
+            width: 100% !important;
+        }
         div.stDownloadButton > button {
             width: 100% !important;
-            height: 42px !important;
-            font-size: 13px !important;
+            height: 45px !important;
+            font-size: 14px !important;
             font-weight: 600 !important;
             border-radius: 8px !important;
             margin: 0 !important;
         }
 
         /* Image Display Crispness */
-        div[data-testid="stImage"] {
-            display: flex;
-            justify-content: center;
-        }
         div[data-testid="stImage"] > img {
             image-rendering: pixelated !important;
             image-rendering: -moz-crisp-edges !important;
@@ -364,19 +364,22 @@ def main() -> None:
 
             st.markdown("---")
 
-            # Main Preview Container
-            st.image(
-                png_bytes_for_copy,
-                caption=caption_text,
-                width=380,
-            )
+            # Split Layout: Left Column (Preview Image) | Right Column (Stacked Buttons)
+            col_left, col_right = st.columns([1.2, 1], gap="medium")
 
-            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            # Left Column: Image Preview
+            with col_left:
+                st.image(
+                    png_bytes_for_copy,
+                    caption=caption_text,
+                    use_container_width=True,
+                )
 
-            # Balanced 3-Button Action Layout
-            b1, b2, b3 = st.columns(3)
-
-            with b1:
+            # Right Column: Stacked Actions (1. Download, 2. Copy Image, 3. Copy URL)
+            with col_right:
+                st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
+                
+                # 1. Download Button (Top)
                 if is_vector:
                     svg_data = generate_svg_qr(
                         clean_url,
@@ -412,10 +415,14 @@ def main() -> None:
                         type="primary",
                     )
 
-            with b2:
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+
+                # 2. Copy Image Button (Middle)
                 render_copy_image_button(png_bytes_for_copy)
 
-            with b3:
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+
+                # 3. Copy URL Button (Bottom)
                 render_copy_url_button(clean_url)
 
         except Exception as err:
